@@ -1,0 +1,313 @@
+.user-management {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  flex-shrink: 0;
+}
+
+.btn-add-user {
+  background: #069a9a;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 14px;
+  font-weight: bold;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.3s ease;
+}
+
+.btn-add-user:hover {
+  background: #048080;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(6, 154, 154, 0.4);
+}
+
+.table-container {
+  flex: 1;
+  overflow: auto;
+  border-radius: 12px;
+  background: white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.users-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.users-table thead {
+  background: #f9fafb;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.users-table th {
+  padding: 14px 12px;
+  text-align: left;
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 14px;
+  font-weight: bold;
+  color: #333;
+  border-bottom: 2px solid #e5e7eb;
+  white-space: nowrap;
+}
+
+.users-table td {
+  padding: 12px;
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 14px;
+  color: #666;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.users-table tbody tr {
+  transition: background 0.2s ease;
+}
+
+.users-table tbody tr:hover {
+  background: #8cd6c2;
+}
+
+.role-badge {
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: bold;
+  display: inline-block;
+}
+
+.role-manager {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.role-staff {
+  background: #e0e7ff;
+  color: #4338ca;
+}
+
+.status-badge {
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: bold;
+  display: inline-block;
+}
+
+.status-badge.active {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.status-badge.inactive {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+/* Modal Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: white;
+  padding: 40px;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 500px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.modal-content h2 {
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 24px;
+  color: #333;
+  margin-bottom: 24px;
+}
+
+.modal-content .form-group {
+  margin-bottom: 20px;
+}
+
+.modal-content .form-group label {
+  display: block;
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 16px;
+  font-weight: bold;
+  color: #333;
+  margin-bottom: 8px;
+}
+
+.modal-content .form-group input,
+.modal-content .form-group select {
+  width: 100%;
+  padding: 12px;
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 16px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  outline: none;
+  transition: all 0.3s ease;
+}
+
+.modal-content .form-group input:focus,
+.modal-content .form-group select:focus {
+  border-color: #069a9a;
+  box-shadow: 0 0 0 3px rgba(6, 154, 154, 0.1);
+}
+
+.modal-buttons {
+  display: flex;
+  gap: 12px;
+  margin-top: 30px;
+}
+
+.modal-buttons button {
+  flex: 1;
+  padding: 12px;
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 16px;
+  font-weight: bold;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-cancel {
+  background: #aeae87;
+  color: white;
+}
+
+.btn-cancel:hover {
+  background: #979769;
+}
+
+.btn-submit {
+  background: #069a9a;
+  color: white;
+}
+
+.btn-submit:hover {
+  background: #048080;
+}
+
+/* Filter and Search Section */
+.filter-section {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  align-items: center;
+  background: white;
+  padding: 16px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  flex-shrink: 0;
+}
+
+.search-box {
+  flex: 1;
+  min-width: 250px;
+}
+
+.search-input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid #d0d0d0;
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: 'Segoe UI', sans-serif;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #069a9a;
+  box-shadow: 0 0 0 3px rgba(6, 154, 154, 0.1);
+}
+
+.role-filter {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.role-filter label {
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+  white-space: nowrap;
+}
+
+.filter-select {
+  padding: 10px 16px;
+  border: 1px solid #d0d0d0;
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: 'Segoe UI', sans-serif;
+  background: white;
+  cursor: pointer;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.filter-select:focus {
+  outline: none;
+  border-color: #069a9a;
+  box-shadow: 0 0 0 3px rgba(6, 154, 154, 0.1);
+}
+
+@media (max-width: 768px) {
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+
+  .modal-content {
+    padding: 24px;
+  }
+
+  .filter-section {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .search-box {
+    min-width: auto;
+  }
+
+  .role-filter {
+    width: 100%;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .filter-select {
+    width: 100%;
+  }
+}

@@ -1,0 +1,188 @@
+.welcome-page {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #1a3a4a 0%, #2d5a6b 50%, #1a6969 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+}
+
+.welcome-container {
+  max-width: 900px;
+  width: 100%;
+  text-align: center;
+}
+
+.welcome-header {
+  margin-bottom: 30px;
+}
+
+.welcome-logo {
+  width: 120px;
+  height: auto;
+  margin-bottom: 20px;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.welcome-title {
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 42px;
+  color: #ffffff;
+  margin: 0 0 10px 0;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.welcome-subtitle {
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 24px;
+  color: #f7cf31;
+  margin: 0;
+  font-weight: normal;
+}
+
+.welcome-description {
+  margin-bottom: 40px;
+}
+
+.welcome-description p {
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 18px;
+  color: #e0e0e0;
+  line-height: 1.6;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.welcome-features {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+  margin-bottom: 40px;
+}
+
+.feature-card {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border-radius: 16px;
+  padding: 30px 20px;
+  transition: all 0.3s ease;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.feature-card:hover {
+  transform: translateY(-8px);
+  background: rgba(255, 255, 255, 0.15);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+}
+
+.feature-icon {
+  width: 70px;
+  height: 70px;
+  background: linear-gradient(135deg, #f7cf31 0%, #e6b800 100%);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 20px;
+  color: #1a3a4a;
+}
+
+.feature-card h3 {
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 20px;
+  color: #ffffff;
+  margin: 0 0 10px 0;
+}
+
+.feature-card p {
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 14px;
+  color: #b0b0b0;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.btn-get-started {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: linear-gradient(135deg, #f7cf31 0%, #e6b800 100%);
+  color: #1a3a4a;
+  border: none;
+  padding: 16px 40px;
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 18px;
+  font-weight: bold;
+  border-radius: 50px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 20px rgba(247, 207, 49, 0.4);
+}
+
+.btn-get-started:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 30px rgba(247, 207, 49, 0.5);
+}
+
+.btn-get-started:active {
+  transform: translateY(-1px);
+}
+
+.welcome-footer {
+  margin-top: 50px;
+}
+
+.welcome-footer p {
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 14px;
+  color: #808080;
+  margin: 0;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .welcome-title {
+    font-size: 32px;
+  }
+
+  .welcome-subtitle {
+    font-size: 18px;
+  }
+
+  .welcome-features {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .feature-card {
+    padding: 24px 16px;
+  }
+
+  .btn-get-started {
+    padding: 14px 32px;
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .welcome-page {
+    padding: 20px;
+  }
+
+  .welcome-logo {
+    width: 80px;
+  }
+
+  .welcome-title {
+    font-size: 26px;
+  }
+
+  .welcome-subtitle {
+    font-size: 16px;
+  }
+
+  .welcome-description p {
+    font-size: 16px;
+  }
+}

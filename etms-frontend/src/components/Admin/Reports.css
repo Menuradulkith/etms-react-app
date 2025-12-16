@@ -1,0 +1,601 @@
+.reports {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  overflow-y: auto;
+  padding-bottom: 24px;
+}
+
+.reports-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.refresh-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background: #1a6969;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.refresh-btn:hover {
+  background: #135151;
+}
+
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px;
+  gap: 16px;
+  color: #666;
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Date Filter Section */
+.date-filter-section {
+  background: white;
+  padding: 16px 20px;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.date-filter {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.date-filter label {
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 14px;
+  color: #555;
+}
+
+.date-filter input[type="date"] {
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 14px;
+}
+
+/* Stats Overview */
+.stats-overview {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.stat-card {
+  background: white;
+  padding: 20px;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  transition: transform 0.3s ease;
+}
+
+.stat-card:hover {
+  transform: translateY(-4px);
+}
+
+.stat-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.stat-card.total .stat-icon {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.stat-card.completed .stat-icon {
+  background: #d1fae5;
+  color: #059669;
+}
+
+.stat-card.in-progress .stat-icon {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.stat-card.pending .stat-icon {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.stat-info h3 {
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 14px;
+  color: #666;
+  margin-bottom: 4px;
+}
+
+.stat-value {
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 28px;
+  font-weight: bold;
+  color: #333;
+  margin: 0;
+}
+
+.stat-sub {
+  font-size: 12px;
+  color: #999;
+}
+
+/* Completion Section */
+.completion-section {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+.completion-card {
+  background: white;
+  padding: 24px;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.completion-card h3 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 16px;
+  color: #333;
+  margin-bottom: 16px;
+}
+
+.progress-container {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.progress-bar {
+  flex: 1;
+  height: 12px;
+  background: #e5e7eb;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #059669, #10b981);
+  border-radius: 6px;
+  transition: width 0.5s ease;
+}
+
+.progress-fill.subtask {
+  background: linear-gradient(90deg, #1e40af, #3b82f6);
+}
+
+.progress-text {
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 18px;
+  font-weight: bold;
+  color: #333;
+  min-width: 50px;
+}
+
+.completion-detail {
+  margin-top: 12px;
+  font-size: 13px;
+  color: #666;
+}
+
+/* Performance Section */
+.performance-section,
+.recent-tasks-section {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+
+.section-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.section-header h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 18px;
+  color: #333;
+  margin: 0;
+}
+
+.table-container {
+  max-height: 350px;
+  overflow-y: auto;
+  overflow-x: auto;
+}
+
+.performance-table,
+.tasks-report-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.performance-table th,
+.tasks-report-table th {
+  padding: 14px 16px;
+  text-align: left;
+  background: #f9fafb;
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 14px;
+  font-weight: bold;
+  color: #333;
+  border-bottom: 2px solid #e5e7eb;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.performance-table td,
+.tasks-report-table td {
+  padding: 12px 16px;
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 14px;
+  color: #555;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.performance-table tbody tr:hover,
+.tasks-report-table tbody tr:hover {
+  background: #f9fafb;
+}
+
+.completed-cell {
+  color: #059669;
+  font-weight: bold;
+}
+
+.progress-cell {
+  color: #d97706;
+  font-weight: bold;
+}
+
+.pending-cell {
+  color: #dc2626;
+  font-weight: bold;
+}
+
+.no-data {
+  text-align: center;
+  color: #999;
+  padding: 40px !important;
+}
+
+.mini-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.mini-progress-fill {
+  width: 100px;
+  height: 8px;
+  background: #e5e7eb;
+  border-radius: 4px;
+  position: relative;
+  overflow: hidden;
+}
+
+.mini-progress-fill::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  background: linear-gradient(90deg, #059669, #10b981);
+  border-radius: 4px;
+  width: inherit;
+}
+
+.mini-progress span {
+  font-weight: bold;
+  color: #333;
+  min-width: 40px;
+}
+
+/* Team Overview */
+.team-overview {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.team-card {
+  background: white;
+  padding: 24px;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.team-icon {
+  width: 60px;
+  height: 60px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.team-icon.managers {
+  background: #ede9fe;
+  color: #7c3aed;
+}
+
+.team-icon.staff {
+  background: #fce7f3;
+  color: #db2777;
+}
+
+.team-info h3 {
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 14px;
+  color: #666;
+  margin-bottom: 4px;
+}
+
+.team-count {
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 32px;
+  font-weight: bold;
+  color: #333;
+  margin: 0;
+}
+
+/* Export Section */
+.export-section {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.export-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+  padding: 24px;
+}
+
+.export-card {
+  background: #f9fafb;
+  padding: 24px;
+  border-radius: 12px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 16px;
+  min-height: 220px;
+}
+
+.export-card:hover {
+  border-color: #1a6969;
+  transform: translateY(-4px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.export-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.export-icon.summary {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.export-icon.tasks {
+  background: #d1fae5;
+  color: #059669;
+}
+
+.export-icon.performance {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.export-info {
+  flex: 1;
+}
+
+.export-info h3 {
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 16px;
+  color: #333;
+  margin-bottom: 8px;
+}
+
+.export-info p {
+  font-size: 13px;
+  color: #666;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.export-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 24px;
+  background: #1a6969;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  width: 100%;
+  margin-top: auto;
+}
+
+.export-btn:hover {
+  background: #135151;
+}
+
+/* Priority & Status Badges */
+.priority-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 16px;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.priority-high {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.priority-medium {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.priority-low {
+  background: #d1fae5;
+  color: #059669;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 16px;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.status-pending {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.status-in-progress {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.status-completed {
+  background: #d1fae5;
+  color: #059669;
+}
+
+/* Manager Search Bar */
+.manager-search-bar {
+  min-width: 180px;
+  max-width: 220px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+  font-size: 14px;
+  font-family: 'Times New Roman', Times, serif;
+  margin-left: 1%;
+  background: #f9fafb;
+  transition: border 0.2s;
+}
+
+.manager-search-bar:focus {
+  border: 1.5px solid #1a6969;
+  outline: none;
+  background: #fff;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .export-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .reports-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .date-filter {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .stats-overview {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .completion-section {
+    grid-template-columns: 1fr;
+  }
+
+  .export-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .performance-table,
+  .tasks-report-table {
+    display: block;
+    overflow-x: auto;
+  }
+}
+
+@media (max-width: 480px) {
+  .stats-overview {
+    grid-template-columns: 1fr;
+  }
+
+  .team-overview {
+    grid-template-columns: 1fr;
+  }
+}
