@@ -265,6 +265,25 @@ const MyAssignedTasks = () => {
     fetchSubtasks();
   }, []);
 
+  // Check for notification redirect and open subtask modal
+  useEffect(() => {
+    const checkNotificationRedirect = () => {
+      const highlightSubtaskId = sessionStorage.getItem('highlightSubtaskId');
+      
+      if (highlightSubtaskId && subtasks.length > 0) {
+        // Find the subtask and open its modal
+        const subtask = subtasks.find(st => st._id === highlightSubtaskId);
+        if (subtask) {
+          handleViewSubtask(subtask._id);
+          sessionStorage.removeItem('highlightSubtaskId');
+          sessionStorage.removeItem('highlightTaskId');
+        }
+      }
+    };
+    
+    checkNotificationRedirect();
+  }, [subtasks]);
+
   useEffect(() => {
     filterSubtasks();
   }, [subtasks, searchTerm, statusFilter, priorityFilter]);

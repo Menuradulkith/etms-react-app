@@ -84,6 +84,33 @@ const AllTasks = () => {
     fetchManagers();
   }, []);
 
+  // Check for notification redirect and open task/subtask modal
+  useEffect(() => {
+    const checkNotificationRedirect = async () => {
+      const highlightTaskId = sessionStorage.getItem('highlightTaskId');
+      const highlightSubtaskId = sessionStorage.getItem('highlightSubtaskId');
+      
+      if (highlightSubtaskId && tasks.length > 0) {
+        // Find the subtask across all tasks
+        for (const task of tasks) {
+          const subtask = (task.subtasks || []).find(st => st._id === highlightSubtaskId);
+          if (subtask) {
+            handleViewSubtask(subtask);
+            sessionStorage.removeItem('highlightSubtaskId');
+            sessionStorage.removeItem('highlightTaskId');
+            break;
+          }
+        }
+      } else if (highlightTaskId && tasks.length > 0) {
+        // Find the task and open its modal
+        handleView(highlightTaskId);
+        sessionStorage.removeItem('highlightTaskId');
+      }
+    };
+    
+    checkNotificationRedirect();
+  }, [tasks]);
+
   // Filter tasks whenever search term or status filter changes
   useEffect(() => {
     filterTasks(searchTerm, statusFilter);
