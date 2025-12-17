@@ -33,7 +33,8 @@ const subTaskSchema = new mongoose.Schema({
   assigned_to: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Staff',
-    required: true
+    required: false, // Optional - Admin creates without assignment, Manager assigns later
+    default: null
   },
   task_id: {
     type: mongoose.Schema.Types.ObjectId,
@@ -42,8 +43,12 @@ const subTaskSchema = new mongoose.Schema({
   },
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Manager',
-    required: true
+    refPath: 'createdByModel'
+  },
+  createdByModel: {
+    type: String,
+    enum: ['Admin', 'Manager'],
+    default: 'Manager'
   },
   attachments: [{
     filename: String,
@@ -51,7 +56,44 @@ const subTaskSchema = new mongoose.Schema({
     path: String,
     mimetype: String,
     size: Number,
+    uploadedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      refPath: 'attachments.uploadedByModel'
+    },
+    uploadedByModel: {
+      type: String,
+      enum: ['Admin', 'Manager', 'Staff']
+    },
+    uploadedByName: String,
+    category: {
+      type: String,
+      enum: ['task_file', 'work_file'],
+      default: 'task_file'
+    },
     uploadedAt: {
+      type: Date,
+      default: Date.now
+    }
+  }],
+  comments: [{
+    text: {
+      type: String,
+      required: true
+    },
+    commentBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      refPath: 'comments.commentByModel'
+    },
+    commentByModel: {
+      type: String,
+      enum: ['Admin', 'Manager', 'Staff']
+    },
+    commentByName: String,
+    replyTo: {
+      type: mongoose.Schema.Types.ObjectId,
+      default: null
+    },
+    createdAt: {
       type: Date,
       default: Date.now
     }

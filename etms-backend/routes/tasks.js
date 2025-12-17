@@ -10,6 +10,7 @@ const User = require('../models/User');
 const Admin = require('../models/Admin');
 const Manager = require('../models/Manager');
 const Staff = require('../models/Staff');
+const Notification = require('../models/Notification');
 const { auth, authorize } = require('../middleware/auth');
 const { logActivity } = require('../utils/activityLogger');
 
@@ -122,8 +123,15 @@ router.get('/subtasks', auth, async (req, res) => {
       const staff = await Staff.findOne({ sid: req.user._id });
       if (staff) query.assigned_to = staff._id;
     } else if (req.user.role === 'Manager') {
+      // Manager should see subtasks for tasks assigned to them
+      // This includes subtasks created by Admin (unassigned) and subtasks they created
       const manager = await Manager.findOne({ mid: req.user._id });
-      if (manager) query.createdBy = manager._id;
+      if (manager) {
+        // Find all tasks assigned to this manager
+        const managerTasks = await Task.find({ assigned_to: manager._id }).select('_id');
+        const taskIds = managerTasks.map(t => t._id);
+        query.task_id = { $in: taskIds };
+      }
     }
 
     const subtasks = await SubTask.find(query)
@@ -131,10 +139,7 @@ router.get('/subtasks', auth, async (req, res) => {
         path: 'assigned_to',
         populate: { path: 'sid', select: 'user_name' }
       })
-      .populate({
-        path: 'createdBy',
-        populate: { path: 'mid', select: 'user_name' }
-      })
+      .populate('createdBy')
       .populate('task_id')
       .sort({ createdAt: -1 });
 
@@ -285,10 +290,29 @@ router.get('/', auth, async (req, res) => {
       })
       .sort({ createdAt: -1 });
 
+    // If user is Admin, include subtasks for each task
+    let tasksWithSubtasks = tasks;
+    if (req.user.role === 'Admin') {
+      tasksWithSubtasks = await Promise.all(tasks.map(async (task) => {
+        const subtasks = await SubTask.find({ task_id: task._id })
+          .populate({
+            path: 'assigned_to',
+            populate: { path: 'sid', select: 'user_name' }
+          })
+          .populate('createdBy')
+          .sort({ createdAt: -1 });
+        
+        return {
+          ...task.toObject(),
+          subtasks: subtasks
+        };
+      }));
+    }
+
     res.json({
       success: true,
-      count: tasks.length,
-      tasks
+      count: tasksWithSubtasks.length,
+      tasks: tasksWithSubtasks
     });
   } catch (error) {
     console.error('Get tasks error:', error);
@@ -404,13 +428,12 @@ router.post('/', auth, authorize('Admin'), [
 });
 
 // @route   POST /api/tasks/subtasks
-// @desc    Create new subtask (Manager assigns to Staff)
-// @access  Private (Manager only)
-router.post('/subtasks', auth, authorize('Manager'), [
+// @desc    Create new subtask (Admin creates without assignment, Manager creates with assignment)
+// @access  Private (Admin or Manager)
+router.post('/subtasks', auth, authorize('Admin', 'Manager'), [
   body('subtask_name').trim().notEmpty().withMessage('Subtask name is required'),
   body('description').trim().notEmpty().withMessage('Description is required'),
   body('due_date').isISO8601().withMessage('Valid due date is required'),
-  body('assigned_to').notEmpty().withMessage('Assigned staff is required'),
   body('task_id').notEmpty().withMessage('Parent task is required')
 ], async (req, res) => {
   try {
@@ -421,20 +444,47 @@ router.post('/subtasks', auth, authorize('Manager'), [
 
     const { subtask_name, description, due_date, assigned_to, task_id, priority } = req.body;
 
-    const staff = await Staff.findById(assigned_to);
-    if (!staff) {
-      return res.status(404).json({ message: 'Assigned staff not found' });
-    }
-
-    const manager = await Manager.findOne({ mid: req.user._id });
     const task = await Task.findById(task_id);
-    
     if (!task) {
       return res.status(404).json({ message: 'Parent task not found' });
     }
 
-    if (task.assigned_to.toString() !== manager._id.toString()) {
-      return res.status(403).json({ message: 'Not authorized to create subtask for this task' });
+    let createdById = null;
+    let createdByModelType = null;
+    let staffMember = null;
+
+    if (req.user.role === 'Admin') {
+      // Admin creates subtask without assignment
+      const admin = await Admin.findOne({ aid: req.user._id });
+      if (!admin) {
+        return res.status(404).json({ message: 'Admin not found' });
+      }
+      createdById = admin._id;
+      createdByModelType = 'Admin';
+    } else if (req.user.role === 'Manager') {
+      // Manager creates subtask with assignment
+      const manager = await Manager.findOne({ mid: req.user._id });
+      if (!manager) {
+        return res.status(404).json({ message: 'Manager not found' });
+      }
+      
+      // Verify manager is assigned to this task
+      if (task.assigned_to.toString() !== manager._id.toString()) {
+        return res.status(403).json({ message: 'Not authorized to create subtask for this task' });
+      }
+
+      // Staff assignment is required for Manager
+      if (!assigned_to) {
+        return res.status(400).json({ message: 'Assigned staff is required' });
+      }
+
+      staffMember = await Staff.findById(assigned_to);
+      if (!staffMember) {
+        return res.status(404).json({ message: 'Assigned staff not found' });
+      }
+
+      createdById = manager._id;
+      createdByModelType = 'Manager';
     }
 
     const subtask = new SubTask({
@@ -442,9 +492,10 @@ router.post('/subtasks', auth, authorize('Manager'), [
       description,
       due_date,
       priority: priority || 'Medium',
-      assigned_to: staff._id,
+      assigned_to: staffMember ? staffMember._id : null,
       task_id: task._id,
-      createdBy: manager._id
+      createdBy: createdById,
+      createdByModel: createdByModelType
     });
 
     await subtask.save();
@@ -454,20 +505,26 @@ router.post('/subtasks', auth, authorize('Manager'), [
         path: 'assigned_to',
         populate: { path: 'sid', select: 'user_name' }
       })
-      .populate({
-        path: 'createdBy',
-        populate: { path: 'mid', select: 'user_name' }
-      })
+      .populate('createdBy')
       .populate('task_id');
 
     // Log activity
+    const activityDesc = staffMember 
+      ? `Subtask "${subtask_name}" created and assigned to ${staffMember.name}`
+      : `Subtask "${subtask_name}" created (unassigned)`;
+    
     await logActivity({
       type: 'subtask_created',
-      description: `Subtask "${subtask_name}" created and assigned to ${staff.name}`,
+      description: activityDesc,
       user: req.user,
       relatedId: subtask._id,
       relatedModel: 'SubTask',
-      metadata: { subtaskId: subtask.subtask_id, assignedTo: staff._id.toString(), staffName: staff.name, managerId: manager._id.toString() }
+      metadata: { 
+        subtaskId: subtask.subtask_id, 
+        assignedTo: staffMember ? staffMember._id.toString() : null, 
+        staffName: staffMember ? staffMember.name : null,
+        createdByRole: createdByModelType
+      }
     });
 
     res.status(201).json({
@@ -480,6 +537,72 @@ router.post('/subtasks', auth, authorize('Manager'), [
     if (error.code === 11000) {
       return res.status(400).json({ message: 'Duplicate key error. Please try again.' });
     }
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// @route   PUT /api/tasks/subtasks/:id/assign
+// @desc    Assign staff to a subtask (Manager only)
+// @access  Private (Manager)
+router.put('/subtasks/:id/assign', auth, authorize('Manager'), async (req, res) => {
+  try {
+    const { assigned_to } = req.body;
+
+    if (!assigned_to) {
+      return res.status(400).json({ message: 'Staff member is required' });
+    }
+
+    const subtask = await SubTask.findById(req.params.id).populate('task_id');
+    if (!subtask) {
+      return res.status(404).json({ message: 'Subtask not found' });
+    }
+
+    // Verify manager is assigned to the parent task
+    const manager = await Manager.findOne({ mid: req.user._id });
+    if (!manager) {
+      return res.status(404).json({ message: 'Manager not found' });
+    }
+
+    if (subtask.task_id.assigned_to.toString() !== manager._id.toString()) {
+      return res.status(403).json({ message: 'Not authorized to assign staff to this subtask' });
+    }
+
+    const staff = await Staff.findById(assigned_to);
+    if (!staff) {
+      return res.status(404).json({ message: 'Staff member not found' });
+    }
+
+    subtask.assigned_to = staff._id;
+    await subtask.save();
+
+    const populatedSubtask = await SubTask.findById(subtask._id)
+      .populate({
+        path: 'assigned_to',
+        populate: { path: 'sid', select: 'user_name' }
+      })
+      .populate('task_id');
+
+    // Log activity
+    await logActivity({
+      type: 'subtask_assigned',
+      description: `Subtask "${subtask.subtask_name}" assigned to ${staff.name}`,
+      user: req.user,
+      relatedId: subtask._id,
+      relatedModel: 'SubTask',
+      metadata: { 
+        subtaskId: subtask.subtask_id, 
+        assignedTo: staff._id.toString(), 
+        staffName: staff.name 
+      }
+    });
+
+    res.json({
+      success: true,
+      message: 'Staff assigned successfully',
+      subtask: populatedSubtask
+    });
+  } catch (error) {
+    console.error('Assign subtask error:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
@@ -549,12 +672,24 @@ router.put('/:id/status', auth, [
       return res.status(404).json({ message: 'Task not found' });
     }
 
+    let updaterName = 'System';
+    let updaterModel = 'Admin';
+    let updaterId = null;
+
     if (req.user.role === 'Manager') {
       const manager = await Manager.findOne({ mid: req.user._id });
       if (task.assigned_to.toString() !== manager._id.toString()) {
         return res.status(403).json({ message: 'Not authorized to update this task' });
       }
-    } else if (req.user.role !== 'Admin') {
+      updaterName = manager.name;
+      updaterModel = 'Manager';
+      updaterId = manager._id;
+    } else if (req.user.role === 'Admin') {
+      const admin = await Admin.findOne({ aid: req.user._id });
+      updaterName = admin?.name || 'Admin';
+      updaterModel = 'Admin';
+      updaterId = admin?._id;
+    } else {
       return res.status(403).json({ message: 'Not authorized' });
     }
 
@@ -575,6 +710,64 @@ router.put('/:id/status', auth, [
       relatedModel: 'Task',
       metadata: { taskId: task.task_id, oldStatus, newStatus: req.body.status }
     });
+
+    // Create notifications for status changes
+    if (req.body.status === 'Completed') {
+      if (req.user.role === 'Manager') {
+        // Notify Admin when Manager completes task
+        const admin = await Admin.findById(task.createdBy);
+        if (admin) {
+          await Notification.create({
+            type: 'task_completed',
+            title: 'Task Completed',
+            message: `${updaterName} (Manager) completed task ${task.task_id}: "${task.task_name}"`,
+            recipient: admin.aid,
+            recipientModel: 'User',
+            sender: updaterId,
+            senderModel: 'Manager',
+            senderName: updaterName,
+            relatedTask: task._id,
+            taskNo: task.task_id
+          });
+        }
+      } else if (req.user.role === 'Admin') {
+        // Notify assigned Manager when Admin completes task
+        const manager = await Manager.findById(task.assigned_to);
+        if (manager) {
+          await Notification.create({
+            type: 'task_completed',
+            title: 'Task Completed',
+            message: `${updaterName} (Admin) marked task ${task.task_id}: "${task.task_name}" as completed`,
+            recipient: manager.mid,
+            recipientModel: 'User',
+            sender: updaterId,
+            senderModel: 'Admin',
+            senderName: updaterName,
+            relatedTask: task._id,
+            taskNo: task.task_id
+          });
+        }
+      }
+    } else if (req.body.status === 'In Progress' && oldStatus === 'Pending') {
+      // Notify when task moves to In Progress
+      if (req.user.role === 'Manager') {
+        const admin = await Admin.findById(task.createdBy);
+        if (admin) {
+          await Notification.create({
+            type: 'status_update',
+            title: 'Task In Progress',
+            message: `${updaterName} (Manager) started working on task ${task.task_id}: "${task.task_name}"`,
+            recipient: admin.aid,
+            recipientModel: 'User',
+            sender: updaterId,
+            senderModel: 'Manager',
+            senderName: updaterName,
+            relatedTask: task._id,
+            taskNo: task.task_id
+          });
+        }
+      }
+    }
 
     res.json({
       success: true,
@@ -630,10 +823,7 @@ router.put('/subtasks/:id', auth, authorize('Manager'), async (req, res) => {
         path: 'assigned_to',
         populate: { path: 'sid', select: 'user_name' }
       })
-      .populate({
-        path: 'createdBy',
-        populate: { path: 'mid', select: 'user_name' }
-      })
+      .populate('createdBy')
       .populate('task_id');
 
     res.json({
@@ -659,22 +849,37 @@ router.put('/subtasks/:id/status', auth, [
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const subtask = await SubTask.findById(req.params.id);
+    const subtask = await SubTask.findById(req.params.id).populate('task_id');
     if (!subtask) {
       return res.status(404).json({ message: 'Subtask not found' });
     }
+
+    let updaterName = 'System';
+    let updaterModel = 'Staff';
+    let updaterId = null;
 
     if (req.user.role === 'Staff') {
       const staff = await Staff.findOne({ sid: req.user._id });
       if (subtask.assigned_to.toString() !== staff._id.toString()) {
         return res.status(403).json({ message: 'Not authorized to update this subtask' });
       }
+      updaterName = staff.name;
+      updaterModel = 'Staff';
+      updaterId = staff._id;
     } else if (req.user.role === 'Manager') {
       const manager = await Manager.findOne({ mid: req.user._id });
       if (subtask.createdBy.toString() !== manager._id.toString()) {
         return res.status(403).json({ message: 'Not authorized to update this subtask' });
       }
-    } else if (req.user.role !== 'Admin') {
+      updaterName = manager.name;
+      updaterModel = 'Manager';
+      updaterId = manager._id;
+    } else if (req.user.role === 'Admin') {
+      const admin = await Admin.findOne({ aid: req.user._id });
+      updaterName = admin?.name || 'Admin';
+      updaterModel = 'Admin';
+      updaterId = admin?._id;
+    } else {
       return res.status(403).json({ message: 'Not authorized' });
     }
 
@@ -695,6 +900,136 @@ router.put('/subtasks/:id/status', auth, [
       relatedModel: 'SubTask',
       metadata: { subtaskId: subtask.subtask_id, oldStatus, newStatus: req.body.status }
     });
+
+    // Create notifications for status changes
+    const parentTask = subtask.task_id;
+    
+    if (req.body.status === 'Completed') {
+      if (req.user.role === 'Staff') {
+        // Notify Manager (subtask creator)
+        const manager = await Manager.findById(subtask.createdBy);
+        if (manager) {
+          await Notification.create({
+            type: 'subtask_completed',
+            title: 'Subtask Completed',
+            message: `${updaterName} (Staff) completed subtask ${subtask.subtask_no}: "${subtask.subtask_name}"`,
+            recipient: manager.mid,
+            recipientModel: 'User',
+            sender: updaterId,
+            senderModel: 'Staff',
+            senderName: updaterName,
+            relatedSubTask: subtask._id,
+            subtaskNo: subtask.subtask_no,
+            relatedTask: parentTask?._id,
+            taskNo: parentTask?.task_id
+          });
+        }
+
+        // Also notify Manager assigned to parent task (if different)
+        if (parentTask && parentTask.assigned_to) {
+          const assignedManager = await Manager.findById(parentTask.assigned_to);
+          if (assignedManager && (!manager || assignedManager._id.toString() !== manager._id.toString())) {
+            await Notification.create({
+              type: 'subtask_completed',
+              title: 'Subtask Completed',
+              message: `${updaterName} (Staff) completed subtask ${subtask.subtask_no}: "${subtask.subtask_name}"`,
+              recipient: assignedManager.mid,
+              recipientModel: 'User',
+              sender: updaterId,
+              senderModel: 'Staff',
+              senderName: updaterName,
+              relatedSubTask: subtask._id,
+              subtaskNo: subtask.subtask_no,
+              relatedTask: parentTask._id,
+              taskNo: parentTask.task_id
+            });
+          }
+        }
+
+        // Notify Admin (task creator)
+        if (parentTask && parentTask.createdBy) {
+          const admin = await Admin.findById(parentTask.createdBy);
+          if (admin) {
+            await Notification.create({
+              type: 'subtask_completed',
+              title: 'Subtask Completed',
+              message: `${updaterName} (Staff) completed subtask ${subtask.subtask_no}: "${subtask.subtask_name}"`,
+              recipient: admin.aid,
+              recipientModel: 'User',
+              sender: updaterId,
+              senderModel: 'Staff',
+              senderName: updaterName,
+              relatedSubTask: subtask._id,
+              subtaskNo: subtask.subtask_no,
+              relatedTask: parentTask._id,
+              taskNo: parentTask.task_id
+            });
+          }
+        }
+      } else if (req.user.role === 'Manager') {
+        // Notify Admin and assigned Staff
+        if (parentTask && parentTask.createdBy) {
+          const admin = await Admin.findById(parentTask.createdBy);
+          if (admin) {
+            await Notification.create({
+              type: 'subtask_completed',
+              title: 'Subtask Completed',
+              message: `${updaterName} (Manager) completed subtask ${subtask.subtask_no}: "${subtask.subtask_name}"`,
+              recipient: admin.aid,
+              recipientModel: 'User',
+              sender: updaterId,
+              senderModel: 'Manager',
+              senderName: updaterName,
+              relatedSubTask: subtask._id,
+              subtaskNo: subtask.subtask_no,
+              relatedTask: parentTask._id,
+              taskNo: parentTask.task_id
+            });
+          }
+        }
+        
+        if (subtask.assigned_to) {
+          const staff = await Staff.findById(subtask.assigned_to);
+          if (staff) {
+            await Notification.create({
+              type: 'subtask_completed',
+              title: 'Subtask Completed',
+              message: `${updaterName} (Manager) marked subtask ${subtask.subtask_no}: "${subtask.subtask_name}" as completed`,
+              recipient: staff.sid,
+              recipientModel: 'User',
+              sender: updaterId,
+              senderModel: 'Manager',
+              senderName: updaterName,
+              relatedSubTask: subtask._id,
+              subtaskNo: subtask.subtask_no,
+              relatedTask: parentTask?._id,
+              taskNo: parentTask?.task_id
+            });
+          }
+        }
+      }
+    } else if (req.body.status === 'In Progress' && oldStatus === 'Pending') {
+      // Notify when subtask moves to In Progress
+      if (req.user.role === 'Staff') {
+        const manager = await Manager.findById(subtask.createdBy);
+        if (manager) {
+          await Notification.create({
+            type: 'status_update',
+            title: 'Subtask In Progress',
+            message: `${updaterName} (Staff) started working on subtask ${subtask.subtask_no}: "${subtask.subtask_name}"`,
+            recipient: manager.mid,
+            recipientModel: 'User',
+            sender: updaterId,
+            senderModel: 'Staff',
+            senderName: updaterName,
+            relatedSubTask: subtask._id,
+            subtaskNo: subtask.subtask_no,
+            relatedTask: parentTask?._id,
+            taskNo: parentTask?.task_id
+          });
+        }
+      }
+    }
 
     res.json({
       success: true,
@@ -819,23 +1154,47 @@ router.post('/reports', auth, authorize('Staff', 'Manager'), [
 
 // @route   POST /api/tasks/subtasks/:id/attachments
 // @desc    Upload attachments to a subtask
-// @access  Private (Manager who created the subtask)
-router.post('/subtasks/:id/attachments', auth, authorize('Manager'), upload.array('attachments', 10), async (req, res) => {
+// @access  Private (Admin or Manager)
+router.post('/subtasks/:id/attachments', auth, authorize('Admin', 'Manager'), upload.array('attachments', 10), async (req, res) => {
   try {
     const subtask = await SubTask.findById(req.params.id);
     if (!subtask) {
       return res.status(404).json({ message: 'Subtask not found' });
     }
 
-    // Verify the manager created this subtask
-    const manager = await Manager.findOne({ mid: req.user._id });
-    if (!manager || subtask.createdBy.toString() !== manager._id.toString()) {
-      return res.status(403).json({ message: 'Not authorized to add attachments to this subtask' });
+    // Verify authorization - Admin can always add, Manager must have created or be assigned to parent task
+    if (req.user.role === 'Manager') {
+      const manager = await Manager.findOne({ mid: req.user._id });
+      // Manager can add attachments if they created the subtask OR if they're assigned to the parent task
+      const parentTask = await Task.findById(subtask.task_id);
+      const isCreator = manager && subtask.createdBy && subtask.createdBy.toString() === manager._id.toString();
+      const isAssignedManager = manager && parentTask && parentTask.assigned_to && parentTask.assigned_to.toString() === manager._id.toString();
+      if (!isCreator && !isAssignedManager) {
+        return res.status(403).json({ message: 'Not authorized to add attachments to this subtask' });
+      }
     }
 
     if (!req.files || req.files.length === 0) {
       return res.status(400).json({ message: 'No files uploaded' });
     }
+
+    // Get uploader info
+    let uploaderId, uploaderModel, uploaderName;
+    if (req.user.role === 'Admin') {
+      const admin = await Admin.findOne({ aid: req.user._id });
+      uploaderId = admin?._id;
+      uploaderModel = 'Admin';
+      uploaderName = admin?.name || 'Admin';
+    } else if (req.user.role === 'Manager') {
+      const manager = await Manager.findOne({ mid: req.user._id });
+      uploaderId = manager?._id;
+      uploaderModel = 'Manager';
+      uploaderName = manager?.name || 'Manager';
+    }
+
+    // Determine attachment category - Admin/Manager uploads during task creation are task_file
+    // Work-related uploads by staff or ongoing uploads are work_file
+    const category = req.body.category || 'work_file';
 
     const newAttachments = req.files.map(file => ({
       filename: file.filename,
@@ -843,11 +1202,101 @@ router.post('/subtasks/:id/attachments', auth, authorize('Manager'), upload.arra
       mimetype: file.mimetype,
       size: file.size,
       path: file.path,
+      uploadedBy: uploaderId,
+      uploadedByModel: uploaderModel,
+      uploadedByName: uploaderName,
+      category: category,
       uploadedAt: new Date()
     }));
 
     subtask.attachments.push(...newAttachments);
     await subtask.save();
+
+    // Create notifications for file upload
+    const parentTask = await Task.findById(subtask.task_id);
+    const fileNames = req.files.map(f => f.originalname).join(', ');
+    
+    if (req.user.role === 'Admin') {
+      // Notify assigned Manager
+      const manager = await Manager.findById(parentTask.assigned_to);
+      if (manager) {
+        await Notification.create({
+          type: 'attachment',
+          title: 'New Attachment on Subtask',
+          message: `${uploaderName} (Admin) uploaded files to subtask ${subtask.subtask_no}: ${fileNames}`,
+          recipient: manager.mid,
+          recipientModel: 'User',
+          sender: uploaderId,
+          senderModel: 'Admin',
+          senderName: uploaderName,
+          relatedSubTask: subtask._id,
+          subtaskNo: subtask.subtask_no,
+          relatedTask: parentTask._id,
+          taskNo: parentTask.task_id
+        });
+      }
+      
+      // Notify assigned Staff if any
+      if (subtask.assigned_to) {
+        const staff = await Staff.findById(subtask.assigned_to);
+        if (staff) {
+          await Notification.create({
+            type: 'attachment',
+            title: 'New Attachment on Subtask',
+            message: `${uploaderName} (Admin) uploaded files to subtask ${subtask.subtask_no}: ${fileNames}`,
+            recipient: staff.sid,
+            recipientModel: 'User',
+            sender: uploaderId,
+            senderModel: 'Admin',
+            senderName: uploaderName,
+            relatedSubTask: subtask._id,
+            subtaskNo: subtask.subtask_no,
+            relatedTask: parentTask._id,
+            taskNo: parentTask.task_id
+          });
+        }
+      }
+    } else if (req.user.role === 'Manager') {
+      // Notify Admin (task creator)
+      const admin = await Admin.findById(parentTask.createdBy);
+      if (admin) {
+        await Notification.create({
+          type: 'attachment',
+          title: 'New Attachment on Subtask',
+          message: `${uploaderName} (Manager) uploaded files to subtask ${subtask.subtask_no}: ${fileNames}`,
+          recipient: admin.aid,
+          recipientModel: 'User',
+          sender: uploaderId,
+          senderModel: 'Manager',
+          senderName: uploaderName,
+          relatedSubTask: subtask._id,
+          subtaskNo: subtask.subtask_no,
+          relatedTask: parentTask._id,
+          taskNo: parentTask.task_id
+        });
+      }
+      
+      // Notify assigned Staff if any
+      if (subtask.assigned_to) {
+        const staff = await Staff.findById(subtask.assigned_to);
+        if (staff) {
+          await Notification.create({
+            type: 'attachment',
+            title: 'New Attachment on Subtask',
+            message: `${uploaderName} (Manager) uploaded files to subtask ${subtask.subtask_no}: ${fileNames}`,
+            recipient: staff.sid,
+            recipientModel: 'User',
+            sender: uploaderId,
+            senderModel: 'Manager',
+            senderName: uploaderName,
+            relatedSubTask: subtask._id,
+            subtaskNo: subtask.subtask_no,
+            relatedTask: parentTask._id,
+            taskNo: parentTask.task_id
+          });
+        }
+      }
+    }
 
     res.json({
       success: true,
@@ -939,18 +1388,23 @@ router.get('/subtasks/:id/attachments/:attachmentId', auth, async (req, res) => 
 
 // @route   DELETE /api/tasks/subtasks/:id/attachments/:attachmentId
 // @desc    Delete a subtask attachment
-// @access  Private (Manager who created the subtask)
-router.delete('/subtasks/:id/attachments/:attachmentId', auth, authorize('Manager'), async (req, res) => {
+// @access  Private (Admin or Manager)
+router.delete('/subtasks/:id/attachments/:attachmentId', auth, authorize('Admin', 'Manager'), async (req, res) => {
   try {
     const subtask = await SubTask.findById(req.params.id);
     if (!subtask) {
       return res.status(404).json({ message: 'Subtask not found' });
     }
 
-    // Verify the manager created this subtask
-    const manager = await Manager.findOne({ mid: req.user._id });
-    if (!manager || subtask.createdBy.toString() !== manager._id.toString()) {
-      return res.status(403).json({ message: 'Not authorized to delete attachments from this subtask' });
+    // Verify authorization - Admin can always delete, Manager must have created or be assigned to parent task
+    if (req.user.role === 'Manager') {
+      const manager = await Manager.findOne({ mid: req.user._id });
+      const parentTask = await Task.findById(subtask.task_id);
+      const isCreator = manager && subtask.createdBy && subtask.createdBy.toString() === manager._id.toString();
+      const isAssignedManager = manager && parentTask && parentTask.assigned_to && parentTask.assigned_to.toString() === manager._id.toString();
+      if (!isCreator && !isAssignedManager) {
+        return res.status(403).json({ message: 'Not authorized to delete attachments from this subtask' });
+      }
     }
 
     const attachment = subtask.attachments.id(req.params.attachmentId);
@@ -995,12 +1449,24 @@ router.post('/:id/attachments', auth, authorize('Admin'), upload.array('attachme
       return res.status(400).json({ message: 'No files uploaded' });
     }
 
+    // Get uploader info (Admin)
+    const admin = await Admin.findOne({ aid: req.user._id });
+    const uploaderId = admin?._id;
+    const uploaderName = admin?.name || 'Admin';
+    
+    // Category: task_file for initial uploads, work_file for ongoing work
+    const category = req.body.category || 'task_file';
+
     const newAttachments = req.files.map(file => ({
       filename: file.filename,
       originalName: file.originalname,
       mimetype: file.mimetype,
       size: file.size,
       path: file.path,
+      uploadedBy: uploaderId,
+      uploadedByModel: 'Admin',
+      uploadedByName: uploaderName,
+      category: category,
       uploadedAt: new Date()
     }));
 
@@ -1117,6 +1583,495 @@ router.get('/:id/attachments', auth, async (req, res) => {
     });
   } catch (error) {
     console.error('Get attachments error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// ============================================
+// COMMENT ROUTES FOR TASKS
+// ============================================
+
+// @route   POST /api/tasks/:id/comments
+// @desc    Add a comment to a task (Admin, Manager)
+// @access  Private (Admin, Manager)
+router.post('/:id/comments', auth, authorize('Admin', 'Manager'), async (req, res) => {
+  try {
+    const { text, replyTo } = req.body;
+    
+    if (!text || text.trim() === '') {
+      return res.status(400).json({ message: 'Comment text is required' });
+    }
+
+    const task = await Task.findById(req.params.id);
+    if (!task) {
+      return res.status(404).json({ message: 'Task not found' });
+    }
+
+    let commentBy, commentByModel, commentByName;
+
+    if (req.user.role === 'Admin') {
+      const admin = await Admin.findOne({ aid: req.user._id });
+      if (!admin) {
+        return res.status(403).json({ message: 'Admin not found' });
+      }
+      commentBy = admin._id;
+      commentByModel = 'Admin';
+      commentByName = admin.name;
+    } else if (req.user.role === 'Manager') {
+      const manager = await Manager.findOne({ mid: req.user._id });
+      if (!manager || task.assigned_to.toString() !== manager._id.toString()) {
+        return res.status(403).json({ message: 'Not authorized to comment on this task' });
+      }
+      commentBy = manager._id;
+      commentByModel = 'Manager';
+      commentByName = manager.name;
+    }
+
+    // Get the parent comment text if replying
+    let replyToText = null;
+    if (replyTo) {
+      const parentComment = task.comments.id(replyTo);
+      if (parentComment) {
+        replyToText = parentComment.text;
+      }
+    }
+
+    const comment = {
+      text: text.trim(),
+      commentBy,
+      commentByModel,
+      commentByName,
+      replyTo: replyTo || null,
+      replyToText,
+      createdAt: new Date()
+    };
+
+    task.comments.push(comment);
+    await task.save();
+
+    // Create notifications based on who commented
+    if (req.user.role === 'Admin') {
+      // Notify assigned manager
+      const manager = await Manager.findById(task.assigned_to);
+      if (manager) {
+        await Notification.create({
+          type: 'comment',
+          title: 'New Comment on Task',
+          message: `${commentByName} (Admin) commented on task ${task.task_id}: "${text.substring(0, 50)}${text.length > 50 ? '...' : ''}"`,
+          recipient: manager.mid,
+          recipientModel: 'User',
+          sender: commentBy,
+          senderModel: 'Admin',
+          senderName: commentByName,
+          relatedTask: task._id,
+          taskNo: task.task_id
+        });
+      }
+    } else if (req.user.role === 'Manager') {
+      // Notify Admin (task creator)
+      const admin = await Admin.findById(task.createdBy);
+      if (admin) {
+        await Notification.create({
+          type: 'comment',
+          title: 'New Comment on Task',
+          message: `${commentByName} (Manager) commented on task ${task.task_id}: "${text.substring(0, 50)}${text.length > 50 ? '...' : ''}"`,
+          recipient: admin._id,
+          recipientModel: 'Admin',
+          sender: commentBy,
+          senderModel: 'Manager',
+          senderName: commentByName,
+          relatedTask: task._id,
+          taskNo: task.task_id
+        });
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'Comment added successfully',
+      comment: task.comments[task.comments.length - 1]
+    });
+  } catch (error) {
+    console.error('Add comment error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// @route   GET /api/tasks/:id/comments
+// @desc    Get all comments for a task
+// @access  Private (Admin, Manager assigned to task)
+router.get('/:id/comments', auth, async (req, res) => {
+  try {
+    const task = await Task.findById(req.params.id);
+    if (!task) {
+      return res.status(404).json({ message: 'Task not found' });
+    }
+
+    // Check access
+    if (req.user.role === 'Manager') {
+      const manager = await Manager.findOne({ mid: req.user._id });
+      if (!manager || task.assigned_to.toString() !== manager._id.toString()) {
+        return res.status(403).json({ message: 'Not authorized to view comments' });
+      }
+    } else if (req.user.role !== 'Admin') {
+      return res.status(403).json({ message: 'Not authorized to view comments' });
+    }
+
+    res.json({
+      success: true,
+      comments: task.comments
+    });
+  } catch (error) {
+    console.error('Get comments error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// ============================================
+// COMMENT ROUTES FOR SUBTASKS
+// ============================================
+
+// @route   POST /api/tasks/subtasks/:id/comments
+// @desc    Add a comment to a subtask (Staff, Manager, or Admin)
+// @access  Private (Staff assigned, Manager assigned to parent task, or Admin)
+router.post('/subtasks/:id/comments', auth, async (req, res) => {
+  try {
+    const { text } = req.body;
+    
+    if (!text || text.trim() === '') {
+      return res.status(400).json({ message: 'Comment text is required' });
+    }
+
+    const subtask = await SubTask.findById(req.params.id).populate('task_id');
+    if (!subtask) {
+      return res.status(404).json({ message: 'Subtask not found' });
+    }
+
+    let commenterId, commenterModel, commenterName;
+    let notifyRecipients = [];
+
+    if (req.user.role === 'Staff') {
+      // Verify the staff is assigned to this subtask
+      const staff = await Staff.findOne({ sid: req.user._id });
+      if (!staff || !subtask.assigned_to || subtask.assigned_to.toString() !== staff._id.toString()) {
+        return res.status(403).json({ message: 'Not authorized to comment on this subtask' });
+      }
+      commenterId = staff._id;
+      commenterModel = 'Staff';
+      commenterName = staff.name;
+      
+      // Notify Manager (parent task assignee) and Admin (task creator)
+      const parentTask = await Task.findById(subtask.task_id);
+      if (parentTask?.assigned_to) {
+        notifyRecipients.push({ id: parentTask.assigned_to, model: 'Manager' });
+      }
+      if (parentTask?.createdBy) {
+        notifyRecipients.push({ id: parentTask.createdBy, model: 'Admin' });
+      }
+    } else if (req.user.role === 'Manager') {
+      const manager = await Manager.findOne({ mid: req.user._id });
+      // Manager can comment if assigned to parent task
+      const parentTask = await Task.findById(subtask.task_id);
+      if (!manager || !parentTask || parentTask.assigned_to.toString() !== manager._id.toString()) {
+        return res.status(403).json({ message: 'Not authorized to comment on this subtask' });
+      }
+      commenterId = manager._id;
+      commenterModel = 'Manager';
+      commenterName = manager.name;
+      
+      // Notify Staff (if assigned) and Admin
+      if (subtask.assigned_to) {
+        notifyRecipients.push({ id: subtask.assigned_to, model: 'Staff' });
+      }
+      if (parentTask?.createdBy) {
+        notifyRecipients.push({ id: parentTask.createdBy, model: 'Admin' });
+      }
+    } else if (req.user.role === 'Admin') {
+      const admin = await Admin.findOne({ aid: req.user._id });
+      commenterId = admin._id;
+      commenterModel = 'Admin';
+      commenterName = admin?.name || 'Admin';
+      
+      // Notify Manager (parent task assignee) and Staff (if assigned)
+      const parentTask = await Task.findById(subtask.task_id);
+      if (parentTask?.assigned_to) {
+        notifyRecipients.push({ id: parentTask.assigned_to, model: 'Manager' });
+      }
+      if (subtask.assigned_to) {
+        notifyRecipients.push({ id: subtask.assigned_to, model: 'Staff' });
+      }
+    } else {
+      return res.status(403).json({ message: 'Not authorized to comment' });
+    }
+
+    const comment = {
+      text: text.trim(),
+      commentBy: commenterId,
+      commentByModel: commenterModel,
+      commentByName: commenterName,
+      replyTo: req.body.replyTo || null,
+      replyToText: null,
+      createdAt: new Date()
+    };
+
+    // Get the parent comment text if replying
+    if (req.body.replyTo) {
+      const parentComment = subtask.comments.id(req.body.replyTo);
+      if (parentComment) {
+        comment.replyToText = parentComment.text;
+      }
+    }
+
+    subtask.comments.push(comment);
+    await subtask.save();
+
+    // Create notifications for relevant parties
+    for (const recipient of notifyRecipients) {
+      await Notification.create({
+        type: 'comment',
+        title: 'New Comment on Subtask',
+        message: `${commenterName} (${commenterModel}) commented on subtask ${subtask.subtask_id}: "${text.substring(0, 50)}${text.length > 50 ? '...' : ''}"`,
+        recipient: recipient.id,
+        recipientModel: recipient.model,
+        sender: commenterId,
+        senderModel: commenterModel,
+        senderName: commenterName,
+        relatedSubTask: subtask._id,
+        relatedTask: subtask.task_id?._id,
+        subtaskNo: subtask.subtask_id,
+        taskNo: subtask.task_id?.task_id
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Comment added successfully',
+      comment: subtask.comments[subtask.comments.length - 1]
+    });
+  } catch (error) {
+    console.error('Add subtask comment error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// @route   GET /api/tasks/subtasks/:id/comments
+// @desc    Get all comments for a subtask
+// @access  Private (Admin, Manager assigned to parent task, Staff assigned to subtask)
+router.get('/subtasks/:id/comments', auth, async (req, res) => {
+  try {
+    const subtask = await SubTask.findById(req.params.id).populate('task_id');
+    if (!subtask) {
+      return res.status(404).json({ message: 'Subtask not found' });
+    }
+
+    // Check access
+    if (req.user.role === 'Staff') {
+      const staff = await Staff.findOne({ sid: req.user._id });
+      if (!staff || !subtask.assigned_to || subtask.assigned_to.toString() !== staff._id.toString()) {
+        return res.status(403).json({ message: 'Not authorized to view comments' });
+      }
+    } else if (req.user.role === 'Manager') {
+      const manager = await Manager.findOne({ mid: req.user._id });
+      // Manager can view if assigned to parent task
+      const parentTask = subtask.task_id;
+      if (!manager || !parentTask || parentTask.assigned_to?.toString() !== manager._id.toString()) {
+        return res.status(403).json({ message: 'Not authorized to view comments' });
+      }
+    } else if (req.user.role !== 'Admin') {
+      return res.status(403).json({ message: 'Not authorized to view comments' });
+    }
+
+    res.json({
+      success: true,
+      comments: subtask.comments
+    });
+  } catch (error) {
+    console.error('Get subtask comments error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// ============================================
+// MANAGER ATTACHMENT UPLOAD FOR TASKS
+// ============================================
+
+// @route   POST /api/tasks/:id/manager-attachments
+// @desc    Manager uploads attachment to their assigned task
+// @access  Private (Manager)
+router.post('/:id/manager-attachments', auth, authorize('Manager'), upload.array('attachments', 5), async (req, res) => {
+  try {
+    const task = await Task.findById(req.params.id);
+    if (!task) {
+      return res.status(404).json({ message: 'Task not found' });
+    }
+
+    // Verify the manager is assigned to this task
+    const manager = await Manager.findOne({ mid: req.user._id });
+    if (!manager || task.assigned_to.toString() !== manager._id.toString()) {
+      return res.status(403).json({ message: 'Not authorized to add attachments to this task' });
+    }
+
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ message: 'No files uploaded' });
+    }
+
+    // Manager uploads during ongoing work are categorized as work_file
+    const category = req.body.category || 'work_file';
+
+    const newAttachments = req.files.map(file => ({
+      filename: file.filename,
+      originalName: file.originalname,
+      mimetype: file.mimetype,
+      size: file.size,
+      path: file.path,
+      uploadedBy: manager._id,
+      uploadedByModel: 'Manager',
+      uploadedByName: manager.name,
+      category: category,
+      uploadedAt: new Date()
+    }));
+
+    task.attachments.push(...newAttachments);
+    await task.save();
+
+    // Create notification for Admin
+    const admin = await Admin.findById(task.createdBy);
+    if (admin) {
+      await Notification.create({
+        type: 'attachment',
+        title: 'New Attachment Added',
+        message: `${manager.name} added ${req.files.length} attachment(s) to task ${task.task_id}`,
+        recipient: admin._id,
+        recipientModel: 'Admin',
+        sender: manager._id,
+        senderModel: 'Manager',
+        senderName: manager.name,
+        relatedTask: task._id,
+        taskNo: task.task_id
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Attachments uploaded successfully',
+      attachments: task.attachments
+    });
+  } catch (error) {
+    console.error('Manager upload attachment error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// ============================================
+// STAFF ATTACHMENT UPLOAD FOR SUBTASKS
+// ============================================
+
+// @route   POST /api/tasks/subtasks/:id/staff-attachments
+// @desc    Staff uploads attachment to their assigned subtask
+// @access  Private (Staff)
+router.post('/subtasks/:id/staff-attachments', auth, authorize('Staff'), upload.array('attachments', 5), async (req, res) => {
+  try {
+    const subtask = await SubTask.findById(req.params.id).populate('task_id');
+    if (!subtask) {
+      return res.status(404).json({ message: 'Subtask not found' });
+    }
+
+    // Verify the staff is assigned to this subtask
+    const staff = await Staff.findOne({ sid: req.user._id });
+    if (!staff || subtask.assigned_to.toString() !== staff._id.toString()) {
+      return res.status(403).json({ message: 'Not authorized to add attachments to this subtask' });
+    }
+
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ message: 'No files uploaded' });
+    }
+
+    // Staff uploads are always work_file (during task execution)
+    const newAttachments = req.files.map(file => ({
+      filename: file.filename,
+      originalName: file.originalname,
+      mimetype: file.mimetype,
+      size: file.size,
+      path: file.path,
+      uploadedBy: staff._id,
+      uploadedByModel: 'Staff',
+      uploadedByName: staff.name,
+      category: 'work_file',
+      uploadedAt: new Date()
+    }));
+
+    subtask.attachments.push(...newAttachments);
+    await subtask.save();
+
+    // Create notification for Manager who created subtask
+    const manager = await Manager.findById(subtask.createdBy);
+    if (manager) {
+      await Notification.create({
+        type: 'attachment',
+        title: 'New Attachment Added',
+        message: `${staff.name} added ${req.files.length} attachment(s) to subtask ${subtask.subtask_id}`,
+        recipient: manager.mid,
+        recipientModel: 'User',
+        sender: staff._id,
+        senderModel: 'Staff',
+        senderName: staff.name,
+        relatedSubTask: subtask._id,
+        relatedTask: subtask.task_id?._id,
+        subtaskNo: subtask.subtask_id,
+        taskNo: subtask.task_id?.task_id
+      });
+    }
+
+    // Also notify Manager assigned to parent task (if different)
+    const parentTask = subtask.task_id;
+    if (parentTask && parentTask.assigned_to) {
+      const assignedManager = await Manager.findById(parentTask.assigned_to);
+      if (assignedManager && (!manager || assignedManager._id.toString() !== manager._id.toString())) {
+        await Notification.create({
+          type: 'attachment',
+          title: 'New Attachment Added',
+          message: `${staff.name} added ${req.files.length} attachment(s) to subtask ${subtask.subtask_id}`,
+          recipient: assignedManager.mid,
+          recipientModel: 'User',
+          sender: staff._id,
+          senderModel: 'Staff',
+          senderName: staff.name,
+          relatedSubTask: subtask._id,
+          relatedTask: parentTask._id,
+          subtaskNo: subtask.subtask_id,
+          taskNo: parentTask.task_id
+        });
+      }
+    }
+
+    // Notify Admin (task creator)
+    if (parentTask && parentTask.createdBy) {
+      const admin = await Admin.findById(parentTask.createdBy);
+      if (admin) {
+        await Notification.create({
+          type: 'attachment',
+          title: 'New Attachment Added',
+          message: `${staff.name} (Staff) added ${req.files.length} attachment(s) to subtask ${subtask.subtask_id}`,
+          recipient: admin.aid,
+          recipientModel: 'User',
+          sender: staff._id,
+          senderModel: 'Staff',
+          senderName: staff.name,
+          relatedSubTask: subtask._id,
+          relatedTask: parentTask._id,
+          subtaskNo: subtask.subtask_id,
+          taskNo: parentTask.task_id
+        });
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'Attachments uploaded successfully',
+      attachments: subtask.attachments
+    });
+  } catch (error) {
+    console.error('Staff upload attachment error:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });

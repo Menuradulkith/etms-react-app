@@ -360,4 +360,244 @@ router.get('/staff/list', auth, authorize('Admin', 'Manager'), async (req, res) 
   }
 });
 
+// ========== MANAGER USER MANAGEMENT ROUTES ==========
+// These routes allow Managers to manage Staff users only
+
+// @route   GET /api/users/manager/staff
+// @desc    Get all staff users (for Manager user management)
+// @access  Private (Manager)
+router.get('/manager/staff', auth, authorize('Manager'), async (req, res) => {
+  try {
+    const { search } = req.query;
+    
+    let userQuery = { role: 'Staff' };
+    
+    if (search) {
+      userQuery.user_name = { $regex: search, $options: 'i' };
+    }
+
+    const users = await User.find(userQuery)
+      .select('-password')
+      .sort({ createdAt: -1 });
+
+    // Enrich users with Staff data
+    const enrichedUsers = await Promise.all(users.map(async (user) => {
+      const staffData = await Staff.findOne({ sid: user._id });
+
+      return {
+        _id: user._id,
+        user_name: user.user_name,
+        email: user.email,
+        role: user.role,
+        status: user.status,
+        name: staffData?.name,
+        department: staffData?.department,
+        roleId: staffData?._id,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt
+      };
+    }));
+
+    res.json({
+      success: true,
+      count: enrichedUsers.length,
+      users: enrichedUsers
+    });
+  } catch (error) {
+    console.error('Get staff users error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// @route   POST /api/users/manager/staff
+// @desc    Create new staff user (by Manager)
+// @access  Private (Manager)
+router.post('/manager/staff', auth, authorize('Manager'), [
+  body('name').trim().notEmpty().withMessage('Name is required'),
+  body('user_name').trim().notEmpty().withMessage('Username is required'),
+  body('email').trim().isEmail().withMessage('Valid email is required'),
+  body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { name, user_name, email, password, department } = req.body;
+
+    // Check if user exists
+    const existingUser = await User.findOne({ user_name: user_name.toLowerCase() });
+    if (existingUser) {
+      return res.status(400).json({ message: 'User already exists with this username' });
+    }
+
+    // Check if email exists
+    const existingEmail = await User.findOne({ email: email.toLowerCase() });
+    if (existingEmail) {
+      return res.status(400).json({ message: 'User already exists with this email' });
+    }
+
+    // Store plain password for email before hashing
+    const plainPassword = password;
+
+    // Create base user (password will be hashed by User model pre-save hook)
+    const user = new User({
+      user_name: user_name.toLowerCase(),
+      email: email.toLowerCase(),
+      password: password,
+      role: 'Staff',
+      status: 'Active',
+      mustChangePassword: true
+    });
+    await user.save();
+
+    // Create Staff record
+    const staffRecord = new Staff({ 
+      sid: user._id, 
+      name, 
+      email: email.toLowerCase(), 
+      department: department || 'General' 
+    });
+    await staffRecord.save();
+
+    // Send welcome email
+    const emailResult = await sendWelcomeEmail({
+      email: email,
+      name: name,
+      username: user_name,
+      password: plainPassword,
+      role: 'Staff'
+    });
+
+    // Log activity
+    await logActivity({
+      type: 'user_created',
+      description: `New Staff "${name}" (${user_name}) was created by Manager`,
+      user: req.user,
+      relatedId: user._id,
+      relatedModel: 'User',
+      metadata: { newUserRole: 'Staff', newUserName: name, createdByManager: true }
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Staff user created successfully',
+      emailSent: emailResult.success,
+      user: {
+        _id: user._id,
+        user_name: user.user_name,
+        email: user.email,
+        role: user.role,
+        name: name,
+        department: staffRecord.department
+      }
+    });
+  } catch (error) {
+    console.error('Create staff user error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// @route   PUT /api/users/manager/staff/:id
+// @desc    Update staff user (by Manager)
+// @access  Private (Manager)
+router.put('/manager/staff/:id', auth, authorize('Manager'), [
+  body('name').optional().trim().notEmpty(),
+  body('password').optional().isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
+  body('department').optional().trim()
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { name, password, department } = req.body;
+
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Ensure the user is Staff only
+    if (user.role !== 'Staff') {
+      return res.status(403).json({ message: 'Managers can only update Staff users' });
+    }
+
+    // Update base user (password will be hashed by User model pre-save hook if modified)
+    if (password) {
+      user.password = password;
+    }
+    await user.save();
+
+    // Update Staff record
+    const updateData = {};
+    if (name) updateData.name = name;
+    if (department) updateData.department = department;
+
+    await Staff.updateOne({ sid: user._id }, updateData);
+
+    const staffData = await Staff.findOne({ sid: user._id });
+
+    res.json({
+      success: true,
+      message: 'Staff user updated successfully',
+      user: {
+        _id: user._id,
+        user_name: user.user_name,
+        role: user.role,
+        status: user.status,
+        name: staffData?.name,
+        department: staffData?.department
+      }
+    });
+  } catch (error) {
+    console.error('Update staff user error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// @route   DELETE /api/users/manager/staff/:id
+// @desc    Delete staff user (by Manager)
+// @access  Private (Manager)
+router.delete('/manager/staff/:id', auth, authorize('Manager'), async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Ensure the user is Staff only
+    if (user.role !== 'Staff') {
+      return res.status(403).json({ message: 'Managers can only delete Staff users' });
+    }
+
+    // Delete Staff record
+    await Staff.deleteOne({ sid: user._id });
+
+    // Delete base user
+    await User.findByIdAndDelete(req.params.id);
+
+    // Log activity
+    await logActivity({
+      type: 'user_deleted',
+      description: `Staff user was deleted by Manager`,
+      user: req.user,
+      relatedId: req.params.id,
+      relatedModel: 'User',
+      metadata: { deletedByManager: true }
+    });
+
+    res.json({
+      success: true,
+      message: 'Staff user deleted successfully'
+    });
+  } catch (error) {
+    console.error('Delete staff user error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
 module.exports = router;

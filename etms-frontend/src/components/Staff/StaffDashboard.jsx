@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
@@ -16,7 +16,12 @@ import {
   Paperclip,
   Download,
   FileText,
-  X
+  X,
+  Upload,
+  Eye,
+  MessageSquare,
+  Reply,
+  Send
 } from 'lucide-react';
 import '../Admin/AdminDashboard.css';
 import '../Admin/AllTasks.css';
@@ -237,6 +242,7 @@ const StaffDashboardOverview = () => {
 
 const MyAssignedTasks = () => {
   const toast = useToast();
+  const chatEndRef = useRef(null);
   const [subtasks, setSubtasks] = useState([]);
   const [filteredSubtasks, setFilteredSubtasks] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -245,6 +251,15 @@ const MyAssignedTasks = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [priorityFilter, setPriorityFilter] = useState('All');
+  const [showViewModal, setShowViewModal] = useState(false);
+  const [viewingSubtask, setViewingSubtask] = useState(null);
+  const [subtaskComments, setSubtaskComments] = useState([]);
+  const [loadingComments, setLoadingComments] = useState(false);
+  const [newComment, setNewComment] = useState('');
+  const [submittingComment, setSubmittingComment] = useState(false);
+  const [replyingTo, setReplyingTo] = useState(null);
+  const [selectedFiles, setSelectedFiles] = useState([]);
+  const [uploadingFiles, setUploadingFiles] = useState(false);
 
   useEffect(() => {
     fetchSubtasks();
@@ -353,6 +368,108 @@ const MyAssignedTasks = () => {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
+  const handleViewSubtask = async (subtaskId) => {
+    try {
+      const subtask = subtasks.find(st => st._id === subtaskId);
+      if (subtask) {
+        setViewingSubtask(subtask);
+        setShowViewModal(true);
+        
+        // Fetch comments for the subtask
+        setLoadingComments(true);
+        try {
+          const commentsResponse = await tasksAPI.getSubtaskComments(subtaskId);
+          setSubtaskComments(commentsResponse.data.comments || []);
+        } catch (error) {
+          console.error('Error fetching comments:', error);
+          setSubtaskComments([]);
+        } finally {
+          setLoadingComments(false);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching subtask details:', error);
+      toast.error('Failed to load task details');
+    }
+  };
+
+  const handleCloseViewModal = () => {
+    setShowViewModal(false);
+    setViewingSubtask(null);
+    setSubtaskComments([]);
+    setNewComment('');
+    setReplyingTo(null);
+    setSelectedFiles([]);
+  };
+
+  // Check if comment is from current user (Staff)
+  const isOwnComment = (comment) => {
+    return comment.commentByModel === 'Staff';
+  };
+
+  const handleAddComment = async () => {
+    if (!newComment.trim() || !viewingSubtask) return;
+    
+    setSubmittingComment(true);
+    try {
+      await tasksAPI.addSubtaskComment(viewingSubtask._id, newComment.trim(), replyingTo?._id);
+      toast.success('Comment added successfully!');
+      setNewComment('');
+      setReplyingTo(null);
+      
+      // Refresh comments
+      const commentsResponse = await tasksAPI.getSubtaskComments(viewingSubtask._id);
+      setSubtaskComments(commentsResponse.data.comments || []);
+      
+      // Scroll to bottom
+      setTimeout(() => {
+        chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
+    } catch (error) {
+      console.error('Error adding comment:', error);
+      toast.error('Failed to add comment');
+    } finally {
+      setSubmittingComment(false);
+    }
+  };
+
+  const handleFileSelect = (e) => {
+    const files = Array.from(e.target.files);
+    setSelectedFiles(files);
+  };
+
+  const handleUploadFiles = async () => {
+    if (selectedFiles.length === 0 || !viewingSubtask) return;
+    
+    setUploadingFiles(true);
+    try {
+      await tasksAPI.uploadStaffAttachments(viewingSubtask._id, selectedFiles);
+      toast.success('Files uploaded successfully!');
+      setSelectedFiles([]);
+      fetchSubtasks();
+      // Refresh subtask data
+      const subtask = subtasks.find(st => st._id === viewingSubtask._id);
+      if (subtask) {
+        setViewingSubtask({ ...subtask, comments: viewingSubtask.comments });
+      }
+    } catch (error) {
+      console.error('Error uploading files:', error);
+      toast.error('Failed to upload files');
+    } finally {
+      setUploadingFiles(false);
+    }
+  };
+
+  const getStatusClass = (status) => {
+    switch(status) {
+      case 'Pending': return 'pending';
+      case 'In Progress': return 'in-progress';
+      case 'Completed': return 'completed';
+      case 'Cancelled': return 'cancelled';
+      default: return '';
+    }
+  };
+
   return (
     <div className="all-tasks">
       <h1 className="page-title">My Assigned Tasks</h1>
@@ -418,7 +535,11 @@ const MyAssignedTasks = () => {
             </thead>
             <tbody>
               {filteredSubtasks.map((subtask) => (
-                <tr key={subtask._id}>
+                <tr 
+                  key={subtask._id} 
+                  className="clickable-row"
+                  onClick={() => handleViewSubtask(subtask._id)}
+                >
                   <td>{subtask.subtaskNo}</td>
                   <td>{subtask.subtaskName}</td>
                   <td>{subtask.description?.substring(0, 50)}...</td>
@@ -431,7 +552,7 @@ const MyAssignedTasks = () => {
                   <td>
                     <button
                       className="action-btn btn-attachments"
-                      onClick={() => handleOpenAttachments(subtask)}
+                      onClick={(e) => { e.stopPropagation(); handleOpenAttachments(subtask); }}
                       title="View Attachments"
                     >
                       <Paperclip size={16} />
@@ -447,6 +568,7 @@ const MyAssignedTasks = () => {
                     <select 
                       value={subtask.status} 
                       onChange={(e) => handleStatusUpdate(subtask._id, e.target.value)}
+                      onClick={(e) => e.stopPropagation()}
                       className="status-select"
                     >
                       <option value="Pending">Pending</option>
@@ -481,7 +603,17 @@ const MyAssignedTasks = () => {
                       <FileText size={20} />
                       <div className="attachment-info">
                         <span className="attachment-name">{attachment.originalName}</span>
-                        <span className="attachment-size">{formatFileSize(attachment.size)}</span>
+                        <div className="attachment-meta">
+                          <span className="attachment-size">{formatFileSize(attachment.size)}</span>
+                          {attachment.uploadedByName && (
+                            <span className="attachment-uploader">
+                              by {attachment.uploadedByName} 
+                              <span className={`uploader-role ${attachment.uploadedByModel?.toLowerCase()}`}>
+                                ({attachment.uploadedByModel})
+                              </span>
+                            </span>
+                          )}
+                        </div>
                       </div>
                       <button
                         className="btn-download"
@@ -496,6 +628,188 @@ const MyAssignedTasks = () => {
               ) : (
                 <p className="no-attachments">No attachments for this task</p>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* View Task Modal with Comments */}
+      {showViewModal && viewingSubtask && (
+        <div className="modal-overlay" onClick={handleCloseViewModal}>
+          <div className="modal-content view-task-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Task Details</h2>
+              <button className="close-btn" onClick={handleCloseViewModal}>
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="view-task-content">
+              <div className="view-task-row">
+                <label>Task No:</label>
+                <span>{viewingSubtask.subtaskNo}</span>
+              </div>
+
+              <div className="view-task-row">
+                <label>Task Name:</label>
+                <span>{viewingSubtask.subtaskName}</span>
+              </div>
+
+              <div className="view-task-row">
+                <label>Description:</label>
+                <p className="task-description">{viewingSubtask.description}</p>
+              </div>
+
+              <div className="view-task-grid">
+                <div className="view-task-row">
+                  <label>Assigned By:</label>
+                  <span>{viewingSubtask.createdBy?.name || 'Manager'}</span>
+                </div>
+
+                <div className="view-task-row">
+                  <label>Due Date:</label>
+                  <span>{new Date(viewingSubtask.dueDate).toLocaleDateString()}</span>
+                </div>
+
+                <div className="view-task-row">
+                  <label>Priority:</label>
+                  <span className={`priority-badge priority-${viewingSubtask.priority?.toLowerCase()}`}>
+                    {viewingSubtask.priority}
+                  </span>
+                </div>
+
+                <div className="view-task-row">
+                  <label>Status:</label>
+                  <span className={`status-badge ${getStatusClass(viewingSubtask.status)}`}>
+                    {viewingSubtask.status}
+                  </span>
+                </div>
+              </div>
+
+              <div className="view-task-row">
+                <label>Attachments:</label>
+                <span>{viewingSubtask.attachments?.length || 0} file(s)</span>
+              </div>
+
+              {/* Upload Attachments Section */}
+              <div className="view-task-row upload-section">
+                <label>Add Attachments:</label>
+                <div className="upload-controls">
+                  <input
+                    type="file"
+                    id="staff-file-upload"
+                    multiple
+                    onChange={handleFileSelect}
+                    style={{ display: 'none' }}
+                    accept=".jpeg,.jpg,.png,.pdf,.doc,.docx,.xls,.xlsx,.txt"
+                  />
+                  <label htmlFor="staff-file-upload" className="file-upload-btn">
+                    <Upload size={16} />
+                    Choose Files
+                  </label>
+                  {selectedFiles.length > 0 && (
+                    <div className="selected-files">
+                      <span>{selectedFiles.length} file(s) selected</span>
+                      <button 
+                        className="upload-btn" 
+                        onClick={handleUploadFiles}
+                        disabled={uploadingFiles}
+                      >
+                        {uploadingFiles ? 'Uploading...' : 'Upload'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Chat Comments Section */}
+              <div className="comments-section chat-style">
+                <h3><MessageSquare size={18} /> Comments</h3>
+                
+                <div className="chat-comments-container">
+                  {loadingComments ? (
+                    <p className="loading-text">Loading comments...</p>
+                  ) : subtaskComments.length === 0 ? (
+                    <p className="no-comments">No comments yet. Start the conversation!</p>
+                  ) : (
+                    subtaskComments.map((comment, index) => {
+                      const isOwn = isOwnComment(comment);
+                      
+                      return (
+                        <div key={comment._id || index} className={`chat-message ${isOwn ? 'own' : 'other'}`}>
+                          <div className={`chat-bubble ${isOwn ? 'own' : 'other'}`}>
+                            <div className="chat-header">
+                              <span className="chat-author">{comment.commentByName || 'Unknown'}</span>
+                              <span className={`chat-role role-${comment.commentByModel?.toLowerCase()}`}>
+                                {comment.commentByModel}
+                              </span>
+                            </div>
+                            
+                            {comment.replyToText && (
+                              <div className="reply-indicator">
+                                <Reply size={12} />
+                                <span className="reply-preview">{comment.replyToText.substring(0, 50)}{comment.replyToText.length > 50 ? '...' : ''}</span>
+                              </div>
+                            )}
+                            
+                            <p className="chat-text">{comment.text}</p>
+                            
+                            <div className="chat-footer">
+                              <span className="chat-time">
+                                {formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })}
+                              </span>
+                              <button 
+                                className="reply-btn"
+                                onClick={() => setReplyingTo(comment)}
+                                title="Reply to this comment"
+                              >
+                                <Reply size={14} /> Reply
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                  <div ref={chatEndRef} />
+                </div>
+                
+                {/* Reply indicator */}
+                {replyingTo && (
+                  <div className="replying-to-indicator">
+                    <Reply size={14} />
+                    <span>Replying to {replyingTo.commentByName}: "{replyingTo.text.substring(0, 40)}{replyingTo.text.length > 40 ? '...' : ''}"</span>
+                    <button className="cancel-reply-btn" onClick={() => setReplyingTo(null)}>
+                      <X size={14} />
+                    </button>
+                  </div>
+                )}
+                
+                {/* Comment input */}
+                <div className="chat-input-container">
+                  <input
+                    type="text"
+                    value={newComment}
+                    onChange={(e) => setNewComment(e.target.value)}
+                    placeholder={replyingTo ? "Type your reply..." : "Type a comment..."}
+                    onKeyPress={(e) => e.key === 'Enter' && !submittingComment && handleAddComment()}
+                    disabled={submittingComment}
+                  />
+                  <button 
+                    className="send-btn"
+                    onClick={handleAddComment}
+                    disabled={!newComment.trim() || submittingComment}
+                  >
+                    <Send size={18} />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="modal-buttons">
+              <button className="btn-cancel" onClick={handleCloseViewModal}>
+                Close
+              </button>
             </div>
           </div>
         </div>
@@ -692,7 +1006,17 @@ const CompletedTasks = () => {
                       <FileText size={20} />
                       <div className="attachment-info">
                         <span className="attachment-name">{attachment.originalName}</span>
-                        <span className="attachment-size">{formatFileSize(attachment.size)}</span>
+                        <div className="attachment-meta">
+                          <span className="attachment-size">{formatFileSize(attachment.size)}</span>
+                          {attachment.uploadedByName && (
+                            <span className="attachment-uploader">
+                              by {attachment.uploadedByName} 
+                              <span className={`uploader-role ${attachment.uploadedByModel?.toLowerCase()}`}>
+                                ({attachment.uploadedByModel})
+                              </span>
+                            </span>
+                          )}
+                        </div>
                       </div>
                       <button
                         className="btn-download"

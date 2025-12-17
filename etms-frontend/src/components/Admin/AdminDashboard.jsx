@@ -15,6 +15,7 @@ import UserManagement from './UserManagement';
 import CreateTask from './CreateTask';
 import AllTasks from './AllTasks';
 import Reports from './Reports';
+import Notifications from '../Notifications/Notifications';
 import './AdminDashboard.css';
 import logo from '../../assets/Harischandra_Mills_logo.jpg';
 
@@ -63,6 +64,7 @@ const AdminDashboard = () => {
           <h2>Welcome, {user?.name || 'Admin'}</h2>
         </div>
         <div className="header-right">
+          <Notifications />
           <button className="logout-btn" onClick={handleLogout}>
             <LogOut size={20} />
             Logout

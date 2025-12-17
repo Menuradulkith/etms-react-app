@@ -46,7 +46,44 @@ const taskSchema = new mongoose.Schema({
     mimetype: String,
     size: Number,
     path: String,
+    uploadedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      refPath: 'attachments.uploadedByModel'
+    },
+    uploadedByModel: {
+      type: String,
+      enum: ['Admin', 'Manager']
+    },
+    uploadedByName: String,
+    category: {
+      type: String,
+      enum: ['task_file', 'work_file'],
+      default: 'task_file'
+    },
     uploadedAt: {
+      type: Date,
+      default: Date.now
+    }
+  }],
+  comments: [{
+    text: {
+      type: String,
+      required: true
+    },
+    commentBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      refPath: 'comments.commentByModel'
+    },
+    commentByModel: {
+      type: String,
+      enum: ['Admin', 'Manager']
+    },
+    commentByName: String,
+    replyTo: {
+      type: mongoose.Schema.Types.ObjectId,
+      default: null
+    },
+    createdAt: {
       type: Date,
       default: Date.now
     }

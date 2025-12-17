@@ -11,6 +11,7 @@ const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/users');
 const taskRoutes = require('./routes/tasks');
 const activityRoutes = require('./routes/activities');
+const notificationRoutes = require('./routes/notifications');
 
 const app = express();
 
@@ -30,6 +31,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/tasks', taskRoutes);
 app.use('/api/activities', activityRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // Root route
 app.get('/', (req, res) => {

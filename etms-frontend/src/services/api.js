@@ -158,6 +158,40 @@ export const usersAPI = {
       }
     };
   },
+
+  // Manager Staff Management APIs
+  getStaffForManager: async (params) => {
+    const response = await api.get('/users/manager/staff', { params });
+    return {
+      ...response,
+      data: {
+        ...response.data,
+        users: (response.data.users || []).map(transformUserFromBackend)
+      }
+    };
+  },
+
+  createStaffByManager: (userData) => {
+    const mappedData = {
+      name: userData.name,
+      user_name: userData.username,
+      email: userData.email,
+      password: userData.password,
+      department: userData.department
+    };
+    return api.post('/users/manager/staff', mappedData);
+  },
+
+  updateStaffByManager: (id, userData) => {
+    const mappedData = {};
+    if (userData.name) mappedData.name = userData.name;
+    if (userData.password) mappedData.password = userData.password;
+    if (userData.department) mappedData.department = userData.department;
+    return api.put(`/users/manager/staff/${id}`, mappedData);
+  },
+
+  deleteStaffByManager: (id) =>
+    api.delete(`/users/manager/staff/${id}`),
 };
 
 // Helper functions to transform task data between frontend and backend formats
@@ -178,7 +212,9 @@ const transformTaskFromBackend = (task) => ({
   } : null,
   createdBy: task.createdBy,
   createdAt: task.createdAt,
-  updatedAt: task.updatedAt
+  updatedAt: task.updatedAt,
+  // Include subtasks if present (for Admin view)
+  subtasks: task.subtasks ? task.subtasks.map(transformSubtaskFromBackend) : []
 });
 
 const transformSubtaskFromBackend = (subtask) => ({
@@ -266,11 +302,19 @@ export const tasksAPI = {
       subtask_name: subtaskData.subtaskName,
       description: subtaskData.description,
       due_date: subtaskData.dueDate,
-      assigned_to: subtaskData.assignedTo,
       task_id: subtaskData.taskId,
       priority: subtaskData.priority || 'Medium'
     };
+    // Only include assigned_to if provided (Admin creates without assignment)
+    if (subtaskData.assignedTo) {
+      mappedData.assigned_to = subtaskData.assignedTo;
+    }
     return api.post('/tasks/subtasks', mappedData);
+  },
+
+  // Assign staff to a subtask (Manager only)
+  assignSubtaskToStaff: (subtaskId, staffId) => {
+    return api.put(`/tasks/subtasks/${subtaskId}/assign`, { assigned_to: staffId });
   },
   
   update: (id, taskData) => {
@@ -354,6 +398,67 @@ export const tasksAPI = {
   
   deleteSubtaskAttachment: (subtaskId, attachmentId) =>
     api.delete(`/tasks/subtasks/${subtaskId}/attachments/${attachmentId}`),
+
+  // Comment methods for tasks
+  getTaskComments: (taskId) =>
+    api.get(`/tasks/${taskId}/comments`),
+  
+  addTaskComment: (taskId, text, replyTo = null) =>
+    api.post(`/tasks/${taskId}/comments`, { text, replyTo }),
+
+  // Comment methods for subtasks
+  getSubtaskComments: (subtaskId) =>
+    api.get(`/tasks/subtasks/${subtaskId}/comments`),
+  
+  addSubtaskComment: (subtaskId, text, replyTo = null) =>
+    api.post(`/tasks/subtasks/${subtaskId}/comments`, { text, replyTo }),
+
+  // Manager attachment upload (for assigned tasks)
+  uploadManagerAttachments: (taskId, files) => {
+    const formData = new FormData();
+    files.forEach(file => {
+      formData.append('attachments', file);
+    });
+    return api.post(`/tasks/${taskId}/manager-attachments`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+  },
+
+  // Staff attachment upload (for assigned subtasks)
+  uploadStaffAttachments: (subtaskId, files) => {
+    const formData = new FormData();
+    files.forEach(file => {
+      formData.append('attachments', file);
+    });
+    return api.post(`/tasks/subtasks/${subtaskId}/staff-attachments`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+  },
+};
+
+// Notifications API
+export const notificationsAPI = {
+  getAll: (params) =>
+    api.get('/notifications', { params }),
+  
+  getUnreadCount: () =>
+    api.get('/notifications/unread-count'),
+  
+  markAsRead: (id) =>
+    api.put(`/notifications/${id}/read`),
+  
+  markAllAsRead: () =>
+    api.put('/notifications/mark-all-read'),
+  
+  delete: (id) =>
+    api.delete(`/notifications/${id}`),
+  
+  clearAll: () =>
+    api.delete('/notifications/clear-all'),
 };
 
 export default api;

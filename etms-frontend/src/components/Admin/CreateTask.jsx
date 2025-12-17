@@ -4,6 +4,7 @@ import 'react-datepicker/dist/react-datepicker.css';
 import { Upload, X, FileText } from 'lucide-react';
 import { tasksAPI, usersAPI } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
+import SearchableSelect from '../SearchableSelect/SearchableSelect';
 import './CreateTask.css';
 
 const CreateTask = () => {
@@ -150,19 +151,14 @@ const CreateTask = () => {
 
           <div className="form-group">
             <label>Assigned To</label>
-            <select
+            <SearchableSelect
+              options={managers.map(m => ({ label: `${m.name} (${m.username})`, value: m._id }))}
               value={formData.assignedTo}
               onChange={(e) => setFormData({ ...formData, assignedTo: e.target.value })}
-              required
+              placeholder="Select Manager"
+              searchPlaceholder="Search managers..."
               disabled={loading}
-            >
-              <option value="">Select Manager</option>
-              {managers.map((manager) => (
-                <option key={manager._id} value={manager._id}>
-                  {manager.name} ({manager.username})
-                </option>
-              ))}
-            </select>
+            />
           </div>
         </div>
 
