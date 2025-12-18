@@ -13,7 +13,8 @@ const SearchableSelect = ({
   disabled = false,
   className = '',
   id,
-  name
+  name,
+  allowCustom = false
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -26,9 +27,10 @@ const SearchableSelect = ({
     return optValue === value;
   });
 
+  // If allowCustom and value doesn't match any option, show the custom value
   const selectedLabel = selectedOption
     ? (typeof selectedOption === 'object' ? selectedOption[labelField] : selectedOption)
-    : '';
+    : (allowCustom && value ? value : '');
 
   // Filter options based on search term
   const filteredOptions = options.filter(opt => {
@@ -127,24 +129,40 @@ const SearchableSelect = ({
             />
           </div>
           <div className="searchable-select-options">
-            {filteredOptions.length === 0 ? (
+            {filteredOptions.length === 0 && !allowCustom ? (
               <div className="searchable-select-no-results">No results found</div>
             ) : (
-              filteredOptions.map((option, index) => {
-                const optValue = typeof option === 'object' ? option[valueField] : option;
-                const optLabel = typeof option === 'object' ? option[labelField] : option;
-                const isSelected = optValue === value;
+              <>
+                {filteredOptions.map((option, index) => {
+                  const optValue = typeof option === 'object' ? option[valueField] : option;
+                  const optLabel = typeof option === 'object' ? option[labelField] : option;
+                  const isSelected = optValue === value;
 
-                return (
+                  return (
+                    <div
+                      key={optValue || index}
+                      className={`searchable-select-option ${isSelected ? 'selected' : ''}`}
+                      onClick={() => handleSelect(option)}
+                    >
+                      {optLabel}
+                    </div>
+                  );
+                })}
+                {allowCustom && searchTerm.trim() && !filteredOptions.some(opt => {
+                  const optLabel = typeof opt === 'object' ? opt[labelField] : opt;
+                  return optLabel?.toLowerCase() === searchTerm.toLowerCase();
+                }) && (
                   <div
-                    key={optValue || index}
-                    className={`searchable-select-option ${isSelected ? 'selected' : ''}`}
-                    onClick={() => handleSelect(option)}
+                    className="searchable-select-option searchable-select-add-new"
+                    onClick={() => handleSelect({ [labelField]: searchTerm.trim(), [valueField]: searchTerm.trim() })}
                   >
-                    {optLabel}
+                    + Add "{searchTerm.trim()}"
                   </div>
-                );
-              })
+                )}
+                {filteredOptions.length === 0 && allowCustom && !searchTerm.trim() && (
+                  <div className="searchable-select-no-results">Type to add a new option</div>
+                )}
+              </>
             )}
           </div>
         </div>

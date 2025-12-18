@@ -21,7 +21,6 @@ const ManagerUserManagement = () => {
     name: '',
     username: '',
     email: '',
-    department: '',
     password: '',
     confirmPassword: ''
   });
@@ -73,7 +72,7 @@ const ManagerUserManagement = () => {
   const handleAddUser = () => {
     setShowModal(true);
     setEditingId(null);
-    setNewUser({ name: '', username: '', email: '', department: '', password: '', confirmPassword: '' });
+    setNewUser({ name: '', username: '', email: '', password: '', confirmPassword: '' });
     setError('');
   };
 
@@ -83,7 +82,6 @@ const ManagerUserManagement = () => {
       name: user.name || '',
       username: user.username || '',
       email: user.email || '',
-      department: user.department || '',
       password: '',
       confirmPassword: ''
     });
@@ -297,16 +295,6 @@ const ManagerUserManagement = () => {
                   disabled={loading || editingId}
                   placeholder="Enter email address"
                   autoComplete="off"
-                />
-              </div>
-              <div className="form-group">
-                <label>Department</label>
-                <input
-                  type="text"
-                  value={newUser.department}
-                  onChange={(e) => setNewUser({ ...newUser, department: e.target.value })}
-                  disabled={loading}
-                  placeholder="Enter department"
                 />
               </div>
               <div className="form-group">

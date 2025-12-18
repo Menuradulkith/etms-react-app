@@ -1,8 +1,21 @@
 const jwt = require('jsonwebtoken');
-const User = require('../models/User');
 const Admin = require('../models/Admin');
 const Manager = require('../models/Manager');
 const Staff = require('../models/Staff');
+
+// Get model based on role
+const getUserModel = (role) => {
+  switch(role) {
+    case 'Admin':
+      return Admin;
+    case 'Manager':
+      return Manager;
+    case 'Staff':
+      return Staff;
+    default:
+      return null;
+  }
+};
 
 const auth = async (req, res, next) => {
   try {
@@ -16,8 +29,14 @@ const auth = async (req, res, next) => {
     // Verify token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     
-    // Find user in the base User collection
-    const user = await User.findById(decoded.id).select('-password');
+    // Find user in the role-specific collection
+    const UserModel = getUserModel(decoded.role);
+    
+    if (!UserModel) {
+      return res.status(401).json({ message: 'Invalid role in token' });
+    }
+
+    const user = await UserModel.findById(decoded.id).select('-password');
     
     if (!user) {
       return res.status(401).json({ message: 'User not found' });
@@ -27,26 +46,8 @@ const auth = async (req, res, next) => {
       return res.status(401).json({ message: 'User account is inactive' });
     }
 
-    // Get role-specific data
-    let roleData = null;
-    if (user.role === 'Admin') {
-      roleData = await Admin.findOne({ aid: user._id });
-    } else if (user.role === 'Manager') {
-      roleData = await Manager.findOne({ mid: user._id });
-    } else if (user.role === 'Staff') {
-      roleData = await Staff.findOne({ sid: user._id });
-    }
-
-    // Combine user and role-specific data
-    req.user = {
-      _id: user._id,
-      user_name: user.user_name,
-      role: user.role,
-      status: user.status,
-      name: roleData?.name,
-      department: roleData?.department,
-      roleId: roleData?._id
-    };
+    // Add role to user object
+    req.user = { ...user.toObject(), role: decoded.role };
     next();
   } catch (error) {
     res.status(401).json({ message: 'Token is not valid' });

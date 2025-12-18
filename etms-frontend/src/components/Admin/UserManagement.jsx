@@ -1,16 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { UserPlus, Edit2, Trash2 } from 'lucide-react';
-import { usersAPI } from '../../services/api';
+import { usersAPI, departmentsAPI } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
+import { useDepartments } from '../../context/DepartmentContext';
 import ConfirmationModal from '../ConfirmationModal/ConfirmationModal';
+import SearchableSelect from '../SearchableSelect/SearchableSelect';
 import './UserManagement.css';
 
 const UserManagement = () => {
   const toast = useToast();
   const { user: currentUser } = useAuth();
+  const { departments: contextDepartments, fetchDepartments } = useDepartments();
   const [users, setUsers] = useState([]);
   const [filteredUsers, setFilteredUsers] = useState([]);
+  const [departments, setDepartments] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showModal, setShowModal] = useState(false);
@@ -18,6 +22,7 @@ const UserManagement = () => {
   const [editingRole, setEditingRole] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState('All');
+  const [departmentFilter, setDepartmentFilter] = useState('All');
   const [confirmModal, setConfirmModal] = useState({ isOpen: false, userId: null, userRole: null });
   const [newUser, setNewUser] = useState({
     name: '',
@@ -31,12 +36,20 @@ const UserManagement = () => {
 
   useEffect(() => {
     fetchUsers();
-  }, []);
+    fetchDepartments(); // Fetch departments when component mounts
+  }, [fetchDepartments]);
 
-  // Filter users whenever search term or role filter changes
+  // Update local departments when context departments change
   useEffect(() => {
-    filterUsers(searchTerm, roleFilter);
-  }, [users, searchTerm, roleFilter]);
+    const userDepts = [...new Set(users.map(u => u.department).filter(Boolean))];
+    const allDepts = [...new Set([...contextDepartments, ...userDepts])].sort();
+    setDepartments(allDepts);
+  }, [contextDepartments, users]);
+
+  // Filter users whenever search term or filters change
+  useEffect(() => {
+    filterUsers(searchTerm, roleFilter, departmentFilter);
+  }, [users, searchTerm, roleFilter, departmentFilter]);
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -53,12 +66,17 @@ const UserManagement = () => {
     }
   };
 
-  const filterUsers = (search, role) => {
+  const filterUsers = (search, role, department) => {
     let filtered = users;
 
     // Filter by role
     if (role !== 'All') {
       filtered = filtered.filter(user => user.role === role);
+    }
+
+    // Filter by department
+    if (department !== 'All') {
+      filtered = filtered.filter(user => user.department === department);
     }
 
     // Filter by search term (name or username)
@@ -79,6 +97,10 @@ const UserManagement = () => {
 
   const handleRoleFilterChange = (e) => {
     setRoleFilter(e.target.value);
+  };
+
+  const handleDepartmentFilterChange = (e) => {
+    setDepartmentFilter(e.target.value);
   };
 
   const handleAddUser = () => {
@@ -214,6 +236,20 @@ const UserManagement = () => {
           />
         </div>
         <div className="role-filter">
+          <label htmlFor="department-select">Filter by Department:</label>
+          <select
+            id="department-select"
+            value={departmentFilter}
+            onChange={handleDepartmentFilterChange}
+            className="filter-select"
+          >
+            <option value="All">All Departments</option>
+            {departments.map((dept) => (
+              <option key={dept} value={dept}>{dept}</option>
+            ))}
+          </select>
+        </div>
+        <div className="role-filter">
           <label htmlFor="role-select">Filter by Role:</label>
           <select
             id="role-select"
@@ -333,13 +369,15 @@ const UserManagement = () => {
                 />
               </div>
               <div className="form-group">
-                <label>Department</label>
-                <input
-                  type="text"
+                <label>Department <span style={{color: 'red'}}>*</span></label>
+                <SearchableSelect
+                  options={departments.map(dept => ({ label: dept, value: dept }))}
                   value={newUser.department}
                   onChange={(e) => setNewUser({ ...newUser, department: e.target.value })}
+                  placeholder="Select or type department"
+                  searchPlaceholder="Search departments..."
                   disabled={loading}
-                  placeholder="Enter department"
+                  allowCustom={true}
                 />
               </div>
               <div className="form-group">

@@ -2,34 +2,64 @@ import React, { useState, useEffect } from 'react';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import { Upload, X, FileText } from 'lucide-react';
-import { tasksAPI, usersAPI } from '../../services/api';
+import { tasksAPI, usersAPI, departmentsAPI } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
+import { useDepartments } from '../../context/DepartmentContext';
 import SearchableSelect from '../SearchableSelect/SearchableSelect';
 import './CreateTask.css';
 
 const CreateTask = () => {
   const toast = useToast();
+  const { departments: contextDepartments, fetchDepartments } = useDepartments();
   const [formData, setFormData] = useState({
     taskName: '',
     description: '',
     dueDate: new Date(),
+    department: '',
     assignedTo: '',
     priority: 'Medium'
   });
 
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [managers, setManagers] = useState([]);
+  const [allManagers, setAllManagers] = useState([]);
+  const [departments, setDepartments] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
     fetchManagers();
-  }, []);
+    fetchDepartments(); // Fetch departments when component mounts
+  }, [fetchDepartments]);
+
+  // Update local departments when context departments change
+  useEffect(() => {
+    const managerDepts = [...new Set(allManagers.map(m => m.department).filter(Boolean))];
+    const allDepts = [...new Set([...contextDepartments, ...managerDepts])].sort();
+    setDepartments(allDepts);
+  }, [contextDepartments, allManagers]);
+
+  // Filter managers when department changes
+  useEffect(() => {
+    if (formData.department) {
+      const filteredManagers = allManagers.filter(m => m.department === formData.department);
+      setManagers(filteredManagers);
+      // Reset assignedTo if current selection is not in filtered list
+      const isCurrentAssignedValid = filteredManagers.some(m => m._id === formData.assignedTo);
+      if (!isCurrentAssignedValid) {
+        setFormData(prev => ({ ...prev, assignedTo: '' }));
+      }
+    } else {
+      setManagers(allManagers);
+    }
+  }, [formData.department, allManagers]);
 
   const fetchManagers = async () => {
     try {
       const response = await usersAPI.getManagers();
-      setManagers(response.data.managers);
+      const managersData = response.data.managers;
+      setAllManagers(managersData);
+      setManagers(managersData);
     } catch (error) {
       console.error('Error fetching managers:', error);
       toast.error('Failed to load managers');
@@ -40,6 +70,12 @@ const CreateTask = () => {
     e.preventDefault();
     setError('');
     setLoading(true);
+
+    if (!formData.department) {
+      toast.error('Please select a department');
+      setLoading(false);
+      return;
+    }
 
     if (!formData.assignedTo) {
       toast.error('Please select a manager');
@@ -82,6 +118,7 @@ const CreateTask = () => {
       taskName: '',
       description: '',
       dueDate: new Date(),
+      department: '',
       assignedTo: '',
       priority: 'Medium'
     });
@@ -150,19 +187,31 @@ const CreateTask = () => {
           </div>
 
           <div className="form-group">
-            <label>Assigned To</label>
+            <label>Department <span style={{color: 'red'}}>*</span></label>
             <SearchableSelect
-              options={managers.map(m => ({ label: `${m.name} (${m.username})`, value: m._id }))}
-              value={formData.assignedTo}
-              onChange={(e) => setFormData({ ...formData, assignedTo: e.target.value })}
-              placeholder="Select Manager"
-              searchPlaceholder="Search managers..."
+              options={departments.map(dept => ({ label: dept, value: dept }))}
+              value={formData.department}
+              onChange={(e) => setFormData({ ...formData, department: e.target.value })}
+              placeholder="Select Department"
+              searchPlaceholder="Search departments..."
               disabled={loading}
             />
           </div>
         </div>
 
         <div className="form-row">
+          <div className="form-group">
+            <label>Assigned To <span style={{color: 'red'}}>*</span></label>
+            <SearchableSelect
+              options={managers.map(m => ({ label: `${m.name} (${m.username})`, value: m._id }))}
+              value={formData.assignedTo}
+              onChange={(e) => setFormData({ ...formData, assignedTo: e.target.value })}
+              placeholder={formData.department ? "Select Manager" : "Select Department First"}
+              searchPlaceholder="Search managers..."
+              disabled={loading || !formData.department}
+            />
+          </div>
+
           <div className="form-group">
             <label>Priority</label>
             <select

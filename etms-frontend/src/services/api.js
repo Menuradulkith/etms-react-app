@@ -116,6 +116,7 @@ export const usersAPI = {
   update: (id, userData) => {
     const mappedData = {};
     if (userData.name) mappedData.name = userData.name;
+    if (userData.email) mappedData.email = userData.email;
     if (userData.password) mappedData.password = userData.password;
     if (userData.status) mappedData.status = userData.status;
     if (userData.department) mappedData.department = userData.department;
@@ -459,6 +460,21 @@ export const notificationsAPI = {
   
   clearAll: () =>
     api.delete('/notifications/clear-all'),
+};
+
+// Department API
+export const departmentsAPI = {
+  getAll: () =>
+    api.get('/departments'),
+  
+  create: (deptData) =>
+    api.post('/departments', deptData),
+  
+  update: (id, deptData) =>
+    api.put(`/departments/${id}`, deptData),
+  
+  delete: (id) =>
+    api.delete(`/departments/${id}`),
 };
 
 export default api;

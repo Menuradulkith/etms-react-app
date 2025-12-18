@@ -1,8 +1,6 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
-const bcrypt = require('bcryptjs');
 const { body, validationResult } = require('express-validator');
-const User = require('../models/User');
 const Admin = require('../models/Admin');
 const Manager = require('../models/Manager');
 const Staff = require('../models/Staff');
@@ -10,8 +8,8 @@ const { auth } = require('../middleware/auth');
 
 const router = express.Router();
 
-// Get role-specific model
-const getRoleModel = (role) => {
+// Get model based on role
+const getUserModel = (role) => {
   switch(role) {
     case 'Admin':
       return Admin;
@@ -36,7 +34,8 @@ const generateToken = (userId, role) => {
 // @access  Public (or Admin only in production)
 router.post('/register', [
   body('name').trim().notEmpty().withMessage('Name is required'),
-  body('user_name').trim().notEmpty().withMessage('Username is required'),
+  body('username').trim().notEmpty().withMessage('Username is required'),
+  body('email').isEmail().withMessage('Valid email is required'),
   body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
   body('role').isIn(['Admin', 'Manager', 'Staff']).withMessage('Invalid role')
 ], async (req, res) => {
@@ -47,36 +46,31 @@ router.post('/register', [
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { name, user_name, password, role, department } = req.body;
+    const { name, username, email, password, role, department, designation } = req.body;
+    const UserModel = getUserModel(role);
 
-    // Check if user exists
-    const existingUser = await User.findOne({ user_name: user_name.toLowerCase() });
+    if (!UserModel) {
+      return res.status(400).json({ message: 'Invalid role' });
+    }
+
+    // Check if user exists in the specific role collection
+    const existingUser = await UserModel.findOne({ $or: [{ email }, { username }] });
     if (existingUser) {
-      return res.status(400).json({ message: 'User already exists with this username' });
+      return res.status(400).json({ message: 'User already exists with this email or username' });
     }
 
-    // Create base user (password will be hashed by User model pre-save hook)
-    const user = new User({
-      user_name: user_name.toLowerCase(),
-      password: password,
-      role,
-      status: 'Active'
-    });
+    // Create new user with role-specific data
+    const userData = {
+      name,
+      username,
+      email,
+      password,
+      ...(role === 'Manager' && { department }),
+      ...(role === 'Staff' && { department, designation })
+    };
+
+    const user = new UserModel(userData);
     await user.save();
-
-    // Create role-specific record
-    const RoleModel = getRoleModel(role);
-    let roleRecord;
-    
-    if (role === 'Admin') {
-      roleRecord = new Admin({ aid: user._id, name });
-    } else if (role === 'Manager') {
-      roleRecord = new Manager({ mid: user._id, name, department: department || 'General' });
-    } else if (role === 'Staff') {
-      roleRecord = new Staff({ sid: user._id, name, department: department || 'General' });
-    }
-    
-    await roleRecord.save();
 
     // Generate token
     const token = generateToken(user._id, role);
@@ -86,8 +80,9 @@ router.post('/register', [
       token,
       user: {
         id: user._id,
-        name: name,
-        user_name: user.user_name,
+        name: user.name,
+        username: user.username,
+        email: user.email,
         role: role
       }
     });
@@ -113,9 +108,14 @@ router.post('/login', [
     }
 
     const { username, password, role } = req.body;
+    const UserModel = getUserModel(role);
 
-    // Find user in base User collection
-    const user = await User.findOne({ user_name: username.toLowerCase(), role });
+    if (!UserModel) {
+      return res.status(400).json({ message: 'Invalid role' });
+    }
+
+    // Find user in role-specific collection
+    const user = await UserModel.findOne({ username: username.toLowerCase() });
     
     if (!user) {
       return res.status(401).json({ message: 'Invalid credentials' });
@@ -127,21 +127,9 @@ router.post('/login', [
     }
 
     // Verify password
-    const isMatch = await bcrypt.compare(password, user.password);
+    const isMatch = await user.comparePassword(password);
     if (!isMatch) {
       return res.status(401).json({ message: 'Invalid credentials' });
-    }
-
-    // Get role-specific data
-    const RoleModel = getRoleModel(role);
-    let roleRecord;
-    
-    if (role === 'Admin') {
-      roleRecord = await Admin.findOne({ aid: user._id });
-    } else if (role === 'Manager') {
-      roleRecord = await Manager.findOne({ mid: user._id });
-    } else if (role === 'Staff') {
-      roleRecord = await Staff.findOne({ sid: user._id });
     }
 
     // Generate token
@@ -152,11 +140,10 @@ router.post('/login', [
       token,
       user: {
         id: user._id,
-        name: roleRecord?.name || user.user_name,
-        user_name: user.user_name,
-        role: role,
-        department: roleRecord?.department,
-        mustChangePassword: user.mustChangePassword || false
+        name: user.name,
+        username: user.username,
+        email: user.email,
+        role: role
       }
     });
   } catch (error) {
@@ -193,58 +180,24 @@ router.post('/change-password', auth, [
     }
 
     const { currentPassword, newPassword } = req.body;
+    const UserModel = getUserModel(req.user.role);
 
-    // Get user from User collection
-    const user = await User.findById(req.user._id);
+    // Get user with password
+    const user = await UserModel.findById(req.user._id);
     
     // Verify current password
-    const isMatch = await bcrypt.compare(currentPassword, user.password);
+    const isMatch = await user.comparePassword(currentPassword);
     if (!isMatch) {
       return res.status(401).json({ message: 'Current password is incorrect' });
     }
 
-    // Update password (pre-save hook will hash it)
+    // Update password
     user.password = newPassword;
-    user.mustChangePassword = false;
     await user.save();
 
     res.json({ message: 'Password changed successfully' });
   } catch (error) {
     console.error('Change password error:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-// @route   POST /api/auth/force-change-password
-// @desc    Force change password on first login (no current password required)
-// @access  Private
-router.post('/force-change-password', auth, [
-  body('newPassword').isLength({ min: 6 }).withMessage('New password must be at least 6 characters')
-], async (req, res) => {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
-    }
-
-    const { newPassword } = req.body;
-
-    // Get user from User collection
-    const user = await User.findById(req.user._id);
-    
-    // Verify user must change password
-    if (!user.mustChangePassword) {
-      return res.status(400).json({ message: 'Password change not required. Use regular change password endpoint.' });
-    }
-
-    // Update password (pre-save hook will hash it)
-    user.password = newPassword;
-    user.mustChangePassword = false;
-    await user.save();
-
-    res.json({ message: 'Password changed successfully' });
-  } catch (error) {
-    console.error('Force change password error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });

@@ -202,6 +202,7 @@ router.post('/', auth, authorize('Admin'), [
 // @access  Private (Admin only)
 router.put('/:id', auth, authorize('Admin'), [
   body('name').optional().trim().notEmpty(),
+  body('email').optional().trim().isEmail().withMessage('Valid email is required'),
   body('password').optional().isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
   body('status').optional().isIn(['Active', 'Inactive']),
   body('department').optional().trim()
@@ -212,11 +213,20 @@ router.put('/:id', auth, authorize('Admin'), [
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { name, password, status, department } = req.body;
+    const { name, email, password, status, department } = req.body;
 
     const user = await User.findById(req.params.id);
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Check if new email already exists (if changing email)
+    if (email && email.toLowerCase() !== user.email) {
+      const existingEmail = await User.findOne({ email: email.toLowerCase(), _id: { $ne: user._id } });
+      if (existingEmail) {
+        return res.status(400).json({ message: 'Email already in use by another user' });
+      }
+      user.email = email.toLowerCase();
     }
 
     // Update base user (password will be hashed by User model pre-save hook if modified)
@@ -242,6 +252,7 @@ router.put('/:id', auth, authorize('Admin'), [
 
     const updateData = {};
     if (name) updateData.name = name;
+    if (email) updateData.email = email.toLowerCase();
     if (department && (user.role === 'Manager' || user.role === 'Staff')) {
       updateData.department = department;
     }
@@ -334,11 +345,21 @@ router.get('/managers/list', auth, async (req, res) => {
 });
 
 // @route   GET /api/users/staff/list
-// @desc    Get all staff
+// @desc    Get all staff (for Admin) or staff in manager's department (for Manager)
 // @access  Private (Manager, Admin)
 router.get('/staff/list', auth, authorize('Admin', 'Manager'), async (req, res) => {
   try {
-    const staff = await Staff.find()
+    let staffQuery = {};
+    
+    // If manager, filter by their department
+    if (req.user.role === 'Manager') {
+      const manager = await Manager.findOne({ mid: req.user._id });
+      if (manager && manager.department) {
+        staffQuery.department = manager.department;
+      }
+    }
+    
+    const staff = await Staff.find(staffQuery)
       .populate('sid', 'user_name status');
 
     const activeStaff = staff.filter(s => s.sid?.status === 'Active');
@@ -364,13 +385,24 @@ router.get('/staff/list', auth, authorize('Admin', 'Manager'), async (req, res) 
 // These routes allow Managers to manage Staff users only
 
 // @route   GET /api/users/manager/staff
-// @desc    Get all staff users (for Manager user management)
+// @desc    Get all staff users (for Manager user management) - filtered by manager's department
 // @access  Private (Manager)
 router.get('/manager/staff', auth, authorize('Manager'), async (req, res) => {
   try {
     const { search } = req.query;
     
-    let userQuery = { role: 'Staff' };
+    // Get the manager's department
+    const manager = await Manager.findOne({ mid: req.user._id });
+    if (!manager) {
+      return res.status(404).json({ message: 'Manager profile not found' });
+    }
+    const managerDepartment = manager.department;
+    
+    // Find all staff in the same department
+    const staffInDepartment = await Staff.find({ department: managerDepartment });
+    const staffUserIds = staffInDepartment.map(s => s.sid);
+    
+    let userQuery = { role: 'Staff', _id: { $in: staffUserIds } };
     
     if (search) {
       userQuery.user_name = { $regex: search, $options: 'i' };
@@ -410,7 +442,7 @@ router.get('/manager/staff', auth, authorize('Manager'), async (req, res) => {
 });
 
 // @route   POST /api/users/manager/staff
-// @desc    Create new staff user (by Manager)
+// @desc    Create new staff user (by Manager) - auto-assigns manager's department
 // @access  Private (Manager)
 router.post('/manager/staff', auth, authorize('Manager'), [
   body('name').trim().notEmpty().withMessage('Name is required'),
@@ -424,7 +456,14 @@ router.post('/manager/staff', auth, authorize('Manager'), [
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { name, user_name, email, password, department } = req.body;
+    const { name, user_name, email, password } = req.body;
+
+    // Get the manager's department to auto-assign
+    const manager = await Manager.findOne({ mid: req.user._id });
+    if (!manager) {
+      return res.status(404).json({ message: 'Manager profile not found' });
+    }
+    const managerDepartment = manager.department;
 
     // Check if user exists
     const existingUser = await User.findOne({ user_name: user_name.toLowerCase() });
@@ -452,12 +491,12 @@ router.post('/manager/staff', auth, authorize('Manager'), [
     });
     await user.save();
 
-    // Create Staff record
+    // Create Staff record with manager's department
     const staffRecord = new Staff({ 
       sid: user._id, 
       name, 
       email: email.toLowerCase(), 
-      department: department || 'General' 
+      department: managerDepartment 
     });
     await staffRecord.save();
 
@@ -473,11 +512,11 @@ router.post('/manager/staff', auth, authorize('Manager'), [
     // Log activity
     await logActivity({
       type: 'user_created',
-      description: `New Staff "${name}" (${user_name}) was created by Manager`,
+      description: `New Staff "${name}" (${user_name}) was created by Manager in ${managerDepartment} department`,
       user: req.user,
       relatedId: user._id,
       relatedModel: 'User',
-      metadata: { newUserRole: 'Staff', newUserName: name, createdByManager: true }
+      metadata: { newUserRole: 'Staff', newUserName: name, createdByManager: true, department: managerDepartment }
     });
 
     res.status(201).json({
@@ -500,12 +539,11 @@ router.post('/manager/staff', auth, authorize('Manager'), [
 });
 
 // @route   PUT /api/users/manager/staff/:id
-// @desc    Update staff user (by Manager)
+// @desc    Update staff user (by Manager) - department is not changeable, always uses manager's department
 // @access  Private (Manager)
 router.put('/manager/staff/:id', auth, authorize('Manager'), [
   body('name').optional().trim().notEmpty(),
-  body('password').optional().isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
-  body('department').optional().trim()
+  body('password').optional().isLength({ min: 6 }).withMessage('Password must be at least 6 characters')
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -513,7 +551,7 @@ router.put('/manager/staff/:id', auth, authorize('Manager'), [
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { name, password, department } = req.body;
+    const { name, password } = req.body;
 
     const user = await User.findById(req.params.id);
     if (!user) {
@@ -525,20 +563,28 @@ router.put('/manager/staff/:id', auth, authorize('Manager'), [
       return res.status(403).json({ message: 'Managers can only update Staff users' });
     }
 
+    // Verify this staff member belongs to the manager's department
+    const manager = await Manager.findOne({ mid: req.user._id });
+    const staffData = await Staff.findOne({ sid: user._id });
+    if (!manager || !staffData || staffData.department !== manager.department) {
+      return res.status(403).json({ message: 'You can only update staff members in your department' });
+    }
+
     // Update base user (password will be hashed by User model pre-save hook if modified)
     if (password) {
       user.password = password;
     }
     await user.save();
 
-    // Update Staff record
+    // Update Staff record (name only, department is fixed)
     const updateData = {};
     if (name) updateData.name = name;
-    if (department) updateData.department = department;
 
-    await Staff.updateOne({ sid: user._id }, updateData);
+    if (Object.keys(updateData).length > 0) {
+      await Staff.updateOne({ sid: user._id }, updateData);
+    }
 
-    const staffData = await Staff.findOne({ sid: user._id });
+    const updatedStaffData = await Staff.findOne({ sid: user._id });
 
     res.json({
       success: true,
@@ -548,8 +594,8 @@ router.put('/manager/staff/:id', auth, authorize('Manager'), [
         user_name: user.user_name,
         role: user.role,
         status: user.status,
-        name: staffData?.name,
-        department: staffData?.department
+        name: updatedStaffData?.name,
+        department: updatedStaffData?.department
       }
     });
   } catch (error) {

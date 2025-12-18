@@ -154,6 +154,16 @@
   font-size: 14px;
 }
 
+.searchable-select-add-new {
+  color: #059669;
+  font-weight: 500;
+  border-top: 1px solid #e5e7eb;
+}
+
+.searchable-select-add-new:hover {
+  background: #ecfdf5;
+}
+
 /* Filter select variant - inline styling */
 .searchable-select.filter-select {
   min-width: 160px;

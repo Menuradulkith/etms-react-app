@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { useToast } from '../../context/ToastContext';
+import { useDepartments } from '../../context/DepartmentContext';
+import { usersAPI, departmentsAPI } from '../../services/api';
 import { 
   LayoutDashboard, 
   Users, 
@@ -8,7 +11,11 @@ import {
   CheckSquare, 
   FileText, 
   LogOut,
-  UserCircle2 
+  UserCircle2,
+  Building2,
+  Plus,
+  X,
+  Trash2
 } from 'lucide-react';
 import DashboardOverview from './DashboardOverview';
 import UserManagement from './UserManagement';
@@ -23,6 +30,18 @@ const AdminDashboard = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { logout, user } = useAuth();
+  const toast = useToast();
+  const { 
+    departments: contextDepartments, 
+    loading: loadingDepts, 
+    createDepartment, 
+    deleteDepartment,
+    fetchDepartments 
+  } = useDepartments();
+  
+  // Department modal state
+  const [showDeptModal, setShowDeptModal] = useState(false);
+  const [newDeptName, setNewDeptName] = useState('');
 
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '' },
@@ -45,6 +64,53 @@ const AdminDashboard = () => {
     setActiveMenu(getActiveMenuFromPath());
   }, [location.pathname]);
 
+  const handleOpenDeptModal = async () => {
+    setShowDeptModal(true);
+    await fetchDepartments();
+  };
+
+  const handleAddDepartment = async () => {
+    if (!newDeptName.trim()) {
+      toast.error('Please enter a department name');
+      return;
+    }
+    if (contextDepartments.includes(newDeptName.trim())) {
+      toast.error('Department already exists');
+      return;
+    }
+
+    try {
+      await createDepartment({ 
+        name: newDeptName.trim(),
+        description: ''
+      });
+      
+      setNewDeptName('');
+      toast.success(`Department "${newDeptName.trim()}" created successfully`);
+    } catch (error) {
+      console.error('Error creating department:', error);
+      toast.error(error.response?.data?.message || 'Failed to create department');
+    }
+  };
+
+  const handleDeleteDepartment = async (deptName) => {
+    try {
+      // Find the department ID from the backend
+      const response = await departmentsAPI.getAll();
+      const dept = response.data.departments.find(d => d.name === deptName);
+      
+      if (dept) {
+        await deleteDepartment(dept._id);
+        toast.success(`Department "${deptName}" deleted successfully`);
+      } else {
+        toast.error('Department not found');
+      }
+    } catch (error) {
+      console.error('Error deleting department:', error);
+      toast.error('Failed to delete department');
+    }
+  };
+
   const handleLogout = () => {
     logout();
     navigate('/login');
@@ -64,6 +130,9 @@ const AdminDashboard = () => {
           <h2>Welcome, {user?.name || 'Admin'}</h2>
         </div>
         <div className="header-right">
+          <button className="dept-btn" onClick={handleOpenDeptModal} title="Manage Departments">
+            <Building2 size={20} />
+          </button>
           <Notifications />
           <button className="logout-btn" onClick={handleLogout}>
             <LogOut size={20} />
@@ -105,6 +174,65 @@ const AdminDashboard = () => {
           </Routes>
         </main>
       </div>
+
+      {/* Department Management Modal */}
+      {showDeptModal && (
+        <div className="modal-overlay" onClick={() => setShowDeptModal(false)}>
+          <div className="dept-modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="dept-modal-header">
+              <h2><Building2 size={24} /> Manage Departments</h2>
+              <button className="close-btn" onClick={() => setShowDeptModal(false)}>
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="dept-modal-body">
+              <div className="dept-add-section">
+                <input
+                  type="text"
+                  value={newDeptName}
+                  onChange={(e) => setNewDeptName(e.target.value)}
+                  placeholder="Enter new department name..."
+                  className="dept-input"
+                  onKeyPress={(e) => e.key === 'Enter' && handleAddDepartment()}
+                />
+                <button className="dept-add-btn" onClick={handleAddDepartment}>
+                  <Plus size={18} />
+                  Add
+                </button>
+              </div>
+
+              <div className="dept-list-section">
+                <h3>Existing Departments ({contextDepartments.length})</h3>
+                {loadingDepts ? (
+                  <p className="dept-loading">Loading departments...</p>
+                ) : contextDepartments.length === 0 ? (
+                  <p className="dept-empty">No departments found. Add one above.</p>
+                ) : (
+                  <ul className="dept-list">
+                    {contextDepartments.map((dept) => (
+                      <li key={dept} className="dept-item">
+                        <span className="dept-name">{dept}</span>
+                        <button 
+                          className="dept-delete-btn" 
+                          onClick={() => handleDeleteDepartment(dept)}
+                          title="Remove from list"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              <p className="dept-note">
+                Note: Departments created here are saved in the database and can be assigned to users. Deleting removes the department permanently.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

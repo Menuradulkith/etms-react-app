@@ -12,6 +12,7 @@ const userRoutes = require('./routes/users');
 const taskRoutes = require('./routes/tasks');
 const activityRoutes = require('./routes/activities');
 const notificationRoutes = require('./routes/notifications');
+const departmentRoutes = require('./routes/departments');
 
 const app = express();
 
@@ -32,6 +33,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/tasks', taskRoutes);
 app.use('/api/activities', activityRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/departments', departmentRoutes);
 
 // Root route
 app.get('/', (req, res) => {

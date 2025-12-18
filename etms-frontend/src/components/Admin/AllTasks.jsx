@@ -2,9 +2,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Edit2, Trash2, Upload, Download, X, FileText, Paperclip, ChevronDown, ChevronRight, MessageSquare, Plus, Send, Reply, FolderOpen, Briefcase } from 'lucide-react';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
-import { tasksAPI, usersAPI } from '../../services/api';
+import { tasksAPI, usersAPI, departmentsAPI } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
+import { useDepartments } from '../../context/DepartmentContext';
 import ConfirmationModal from '../ConfirmationModal/ConfirmationModal';
 import SearchableSelect from '../SearchableSelect/SearchableSelect';
 import { format, formatDistanceToNow } from 'date-fns';
@@ -13,6 +14,7 @@ import './AllTasks.css';
 const AllTasks = () => {
   const toast = useToast();
   const { user } = useAuth();
+  const { departments } = useDepartments();
   const chatEndRef = useRef(null);
   const [tasks, setTasks] = useState([]);
   const [filteredTasks, setFilteredTasks] = useState([]);
@@ -23,6 +25,7 @@ const AllTasks = () => {
   const [managers, setManagers] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
+  const [departmentFilter, setDepartmentFilter] = useState('All');
   const [confirmModal, setConfirmModal] = useState({ isOpen: false, taskId: null });
   const [attachmentConfirmModal, setAttachmentConfirmModal] = useState({ isOpen: false, taskId: null, attachmentId: null });
   const [showAttachmentsModal, setShowAttachmentsModal] = useState(false);
@@ -111,10 +114,10 @@ const AllTasks = () => {
     checkNotificationRedirect();
   }, [tasks]);
 
-  // Filter tasks whenever search term or status filter changes
+  // Filter tasks whenever search term or status filter or department filter changes
   useEffect(() => {
-    filterTasks(searchTerm, statusFilter);
-  }, [tasks, searchTerm, statusFilter]);
+    filterTasks(searchTerm, statusFilter, departmentFilter);
+  }, [tasks, searchTerm, statusFilter, departmentFilter]);
 
   const fetchTasks = async () => {
     setLoading(true);
@@ -133,12 +136,17 @@ const AllTasks = () => {
     }
   };
 
-  const filterTasks = (search, status) => {
+  const filterTasks = (search, status, department) => {
     let filtered = tasks;
 
     // Filter by status
     if (status !== 'All') {
       filtered = filtered.filter(task => task.status === status);
+    }
+
+    // Filter by department (based on assigned manager's department)
+    if (department !== 'All') {
+      filtered = filtered.filter(task => task.assignedTo?.department === department);
     }
 
     // Filter by search term (task no, name, or description)
@@ -162,10 +170,15 @@ const AllTasks = () => {
     setStatusFilter(e.target.value);
   };
 
+  const handleDepartmentFilterChange = (e) => {
+    setDepartmentFilter(e.target.value);
+  };
+
   const fetchManagers = async () => {
     try {
-      const response = await usersAPI.getManagers();
-      setManagers(response.data.managers);
+      const managersResponse = await usersAPI.getManagers();
+      const managersData = managersResponse.data.managers;
+      setManagers(managersData);
     } catch (error) {
       console.error('Error fetching managers:', error);
     }
@@ -627,6 +640,20 @@ const AllTasks = () => {
             onChange={handleSearchChange}
             className="search-input"
           />
+        </div>
+        <div className="status-filter">
+          <label htmlFor="department-select">Filter by Department:</label>
+          <select
+            id="department-select"
+            value={departmentFilter}
+            onChange={handleDepartmentFilterChange}
+            className="filter-select"
+          >
+            <option value="All">All Departments</option>
+            {departments.map((dept) => (
+              <option key={dept._id} value={dept.name}>{dept.name}</option>
+            ))}
+          </select>
         </div>
         <div className="status-filter">
           <label htmlFor="status-select">Filter by Status:</label>
