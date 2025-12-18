@@ -1,6 +1,7 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const { body, validationResult } = require('express-validator');
+const User = require('../models/User');
 const Admin = require('../models/Admin');
 const Manager = require('../models/Manager');
 const Staff = require('../models/Staff');
@@ -108,16 +109,16 @@ router.post('/login', [
     }
 
     const { username, password, role } = req.body;
-    const UserModel = getUserModel(role);
 
-    if (!UserModel) {
-      return res.status(400).json({ message: 'Invalid role' });
-    }
-
-    // Find user in role-specific collection
-    const user = await UserModel.findOne({ username: username.toLowerCase() });
+    // Find user in base User collection
+    const user = await User.findOne({ user_name: username.toLowerCase() });
     
     if (!user) {
+      return res.status(401).json({ message: 'Invalid credentials' });
+    }
+
+    // Check if the user's role matches the requested role
+    if (user.role !== role) {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 
@@ -132,6 +133,20 @@ router.post('/login', [
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 
+    // Get additional user details from role-specific collection
+    const UserModel = getUserModel(role);
+    let roleSpecificUser = null;
+    
+    if (UserModel) {
+      if (role === 'Admin') {
+        roleSpecificUser = await UserModel.findOne({ aid: user._id });
+      } else if (role === 'Manager') {
+        roleSpecificUser = await UserModel.findOne({ mid: user._id });
+      } else if (role === 'Staff') {
+        roleSpecificUser = await UserModel.findOne({ sid: user._id });
+      }
+    }
+
     // Generate token
     const token = generateToken(user._id, role);
 
@@ -140,10 +155,12 @@ router.post('/login', [
       token,
       user: {
         id: user._id,
-        name: user.name,
-        username: user.username,
+        name: roleSpecificUser ? roleSpecificUser.name : user.user_name,
+        username: user.user_name,
         email: user.email,
-        role: role
+        role: role,
+        department: roleSpecificUser?.department,
+        designation: roleSpecificUser?.designation
       }
     });
   } catch (error) {
@@ -180,10 +197,13 @@ router.post('/change-password', auth, [
     }
 
     const { currentPassword, newPassword } = req.body;
-    const UserModel = getUserModel(req.user.role);
 
-    // Get user with password
-    const user = await UserModel.findById(req.user._id);
+    // Get user from base User collection with password
+    const user = await User.findById(req.user.id);
+    
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
     
     // Verify current password
     const isMatch = await user.comparePassword(currentPassword);
@@ -193,6 +213,7 @@ router.post('/change-password', auth, [
 
     // Update password
     user.password = newPassword;
+    user.mustChangePassword = false; // User has changed from default password
     await user.save();
 
     res.json({ message: 'Password changed successfully' });
