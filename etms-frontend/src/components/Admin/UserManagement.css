@@ -311,3 +311,92 @@
     width: 100%;
   }
 }
+
+/* Action Buttons */
+.action-buttons {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-start;
+}
+
+.action-btn {
+  padding: 8px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+}
+
+.action-btn.btn-edit {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.action-btn.btn-edit:hover {
+  background: #1e40af;
+  color: white;
+  transform: translateY(-2px);
+}
+
+.action-btn.btn-reset-password {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.action-btn.btn-reset-password:hover {
+  background: #b45309;
+  color: white;
+  transform: translateY(-2px);
+}
+
+.action-btn.btn-delete {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.action-btn.btn-delete:hover {
+  background: #dc2626;
+  color: white;
+  transform: translateY(-2px);
+}
+
+/* Reset Password Modal */
+.reset-password-modal h2 {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.reset-password-modal h2 svg {
+  color: #b45309;
+}
+
+.reset-password-info {
+  background: #fef3c7;
+  border: 1px solid #fbbf24;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 20px;
+  font-size: 14px;
+  color: #92400e;
+}
+
+.reset-password-info strong {
+  color: #b45309;
+}
+
+.btn-reset {
+  background: #f59e0b !important;
+}
+
+.btn-reset:hover {
+  background: #d97706 !important;
+}
+
+.btn-reset:disabled {
+  background: #ccc !important;
+  cursor: not-allowed;
+}

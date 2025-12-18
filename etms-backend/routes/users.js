@@ -317,6 +317,65 @@ router.delete('/:id', auth, authorize('Admin'), async (req, res) => {
   }
 });
 
+// @route   POST /api/users/:id/reset-password
+// @desc    Admin resets user password (for forgotten passwords)
+// @access  Private (Admin only)
+router.post('/:id/reset-password', auth, authorize('Admin'), [
+  body('newPassword').isLength({ min: 6 }).withMessage('Password must be at least 6 characters')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { newPassword } = req.body;
+
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Prevent resetting own password through this route
+    if (user._id.toString() === req.user._id.toString()) {
+      return res.status(400).json({ message: 'Cannot reset your own password. Use change password instead.' });
+    }
+
+    // Get user's name for logging
+    let userName = user.user_name;
+    if (user.role === 'Manager') {
+      const manager = await Manager.findOne({ mid: user._id });
+      userName = manager?.name || user.user_name;
+    } else if (user.role === 'Staff') {
+      const staff = await Staff.findOne({ sid: user._id });
+      userName = staff?.name || user.user_name;
+    }
+
+    // Update password and set mustChangePassword flag
+    user.password = newPassword;
+    user.mustChangePassword = true; // Force user to change password on next login
+    await user.save();
+
+    // Log activity
+    await logActivity({
+      type: 'password_reset',
+      description: `Password was reset for ${user.role} "${userName}" (${user.user_name}) by Admin`,
+      user: req.user,
+      relatedId: user._id,
+      relatedModel: 'User',
+      metadata: { targetUserRole: user.role, targetUserName: userName }
+    });
+
+    res.json({
+      success: true,
+      message: `Password reset successfully for ${userName}. User will be required to change password on next login.`
+    });
+  } catch (error) {
+    console.error('Reset password error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
 // @route   GET /api/users/managers/list
 // @desc    Get all managers
 // @access  Private

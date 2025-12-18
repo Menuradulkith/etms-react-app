@@ -54,6 +54,9 @@ export const authAPI = {
   
   forceChangePassword: (newPassword) =>
     api.post('/auth/force-change-password', { newPassword }),
+  
+  updateProfile: (currentPassword, newUsername, newPassword) =>
+    api.put('/auth/update-profile', { currentPassword, newUsername, newPassword }),
 };
 
 // Activities API
@@ -125,6 +128,9 @@ export const usersAPI = {
   
   delete: (id) =>
     api.delete(`/users/${id}`),
+  
+  resetPassword: (id, newPassword) =>
+    api.post(`/users/${id}/reset-password`, { newPassword }),
   
   getManagers: async () => {
     const response = await api.get('/users/managers/list');

@@ -15,7 +15,8 @@ import {
   Building2,
   Plus,
   X,
-  Trash2
+  Trash2,
+  Settings
 } from 'lucide-react';
 import DashboardOverview from './DashboardOverview';
 import UserManagement from './UserManagement';
@@ -23,6 +24,7 @@ import CreateTask from './CreateTask';
 import AllTasks from './AllTasks';
 import Reports from './Reports';
 import Notifications from '../Notifications/Notifications';
+import AdminSettingsModal from './AdminSettingsModal';
 import './AdminDashboard.css';
 import logo from '../../assets/Harischandra_Mills_logo.jpg';
 
@@ -42,6 +44,9 @@ const AdminDashboard = () => {
   // Department modal state
   const [showDeptModal, setShowDeptModal] = useState(false);
   const [newDeptName, setNewDeptName] = useState('');
+  
+  // Admin settings modal state
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
 
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '' },
@@ -132,6 +137,9 @@ const AdminDashboard = () => {
         <div className="header-right">
           <button className="dept-btn" onClick={handleOpenDeptModal} title="Manage Departments">
             <Building2 size={20} />
+          </button>
+          <button className="settings-btn" onClick={() => setShowSettingsModal(true)} title="Admin Settings">
+            <Settings size={20} />
           </button>
           <Notifications />
           <button className="logout-btn" onClick={handleLogout}>
@@ -233,6 +241,12 @@ const AdminDashboard = () => {
           </div>
         </div>
       )}
+
+      {/* Admin Settings Modal */}
+      <AdminSettingsModal
+        isOpen={showSettingsModal}
+        onClose={() => setShowSettingsModal(false)}
+      />
     </div>
   );
 };

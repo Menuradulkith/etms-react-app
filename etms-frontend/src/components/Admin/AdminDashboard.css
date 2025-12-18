@@ -57,6 +57,26 @@
   box-shadow: 0 4px 12px rgba(26, 58, 74, 0.3);
 }
 
+.settings-btn {
+  background: transparent;
+  color: #1a3a4a;
+  border: 2px solid #1a3a4a;
+  padding: 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+}
+
+.settings-btn:hover {
+  background: #1a3a4a;
+  color: white;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(26, 58, 74, 0.3);
+}
+
 .logout-btn {
   background: #f7cf31;
   color: white;

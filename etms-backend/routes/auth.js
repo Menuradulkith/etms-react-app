@@ -160,7 +160,8 @@ router.post('/login', [
         email: user.email,
         role: role,
         department: roleSpecificUser?.department,
-        designation: roleSpecificUser?.designation
+        designation: roleSpecificUser?.designation,
+        mustChangePassword: user.mustChangePassword || false
       }
     });
   } catch (error) {
@@ -219,6 +220,106 @@ router.post('/change-password', auth, [
     res.json({ message: 'Password changed successfully' });
   } catch (error) {
     console.error('Change password error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// @route   POST /api/auth/force-change-password
+// @desc    Force change password on first login (no current password required)
+// @access  Private
+router.post('/force-change-password', auth, [
+  body('newPassword').isLength({ min: 6 }).withMessage('New password must be at least 6 characters')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { newPassword } = req.body;
+
+    // Get user from base User collection
+    const user = await User.findById(req.user.id);
+    
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Only allow if user must change password
+    if (!user.mustChangePassword) {
+      return res.status(400).json({ message: 'Password change not required. Use regular change password.' });
+    }
+
+    // Update password
+    user.password = newPassword;
+    user.mustChangePassword = false;
+    await user.save();
+
+    res.json({ message: 'Password changed successfully' });
+  } catch (error) {
+    console.error('Force change password error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// @route   PUT /api/auth/update-profile
+// @desc    Update admin's own username and/or password
+// @access  Private (Admin only)
+router.put('/update-profile', auth, [
+  body('newUsername').optional().trim().notEmpty().withMessage('Username cannot be empty'),
+  body('newPassword').optional().isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
+  body('currentPassword').notEmpty().withMessage('Current password is required')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { newUsername, newPassword, currentPassword } = req.body;
+
+    // Get user from base User collection
+    const user = await User.findById(req.user.id);
+    
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Verify current password
+    const isMatch = await user.comparePassword(currentPassword);
+    if (!isMatch) {
+      return res.status(401).json({ message: 'Current password is incorrect' });
+    }
+
+    // Check if new username is already taken
+    if (newUsername && newUsername.toLowerCase() !== user.user_name) {
+      const existingUser = await User.findOne({ 
+        user_name: newUsername.toLowerCase(), 
+        _id: { $ne: user._id } 
+      });
+      if (existingUser) {
+        return res.status(400).json({ message: 'Username already taken' });
+      }
+      user.user_name = newUsername.toLowerCase();
+    }
+
+    // Update password if provided
+    if (newPassword) {
+      user.password = newPassword;
+    }
+
+    await user.save();
+
+    res.json({ 
+      message: 'Profile updated successfully',
+      user: {
+        id: user._id,
+        username: user.user_name,
+        role: user.role
+      }
+    });
+  } catch (error) {
+    console.error('Update profile error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });

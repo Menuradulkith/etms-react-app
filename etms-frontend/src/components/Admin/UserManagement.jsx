@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { UserPlus, Edit2, Trash2 } from 'lucide-react';
+import { UserPlus, Edit2, Trash2, KeyRound } from 'lucide-react';
 import { usersAPI, departmentsAPI } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
@@ -24,6 +24,13 @@ const UserManagement = () => {
   const [roleFilter, setRoleFilter] = useState('All');
   const [departmentFilter, setDepartmentFilter] = useState('All');
   const [confirmModal, setConfirmModal] = useState({ isOpen: false, userId: null, userRole: null });
+  const [resetPasswordModal, setResetPasswordModal] = useState({ 
+    isOpen: false, 
+    userId: null, 
+    userName: '', 
+    newPassword: '',
+    confirmPassword: ''
+  });
   const [newUser, setNewUser] = useState({
     name: '',
     username: '',
@@ -212,6 +219,56 @@ const UserManagement = () => {
     setConfirmModal({ isOpen: false, userId: null, userRole: null });
   };
 
+  // Reset Password handlers
+  const handleResetPasswordClick = (user) => {
+    setResetPasswordModal({
+      isOpen: true,
+      userId: user._id,
+      userName: user.name || user.username,
+      newPassword: '',
+      confirmPassword: ''
+    });
+  };
+
+  const handleResetPassword = async () => {
+    const { userId, newPassword, confirmPassword, userName } = resetPasswordModal;
+
+    if (!newPassword || newPassword.length < 6) {
+      toast.error('Password must be at least 6 characters');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      toast.error('Passwords do not match');
+      return;
+    }
+
+    try {
+      await usersAPI.resetPassword(userId, newPassword);
+      toast.success(`Password reset successfully for ${userName}. They will be required to change it on next login.`);
+      setResetPasswordModal({ 
+        isOpen: false, 
+        userId: null, 
+        userName: '', 
+        newPassword: '',
+        confirmPassword: ''
+      });
+    } catch (error) {
+      console.error('Error resetting password:', error);
+      toast.error(error.response?.data?.message || 'Failed to reset password');
+    }
+  };
+
+  const handleCancelResetPassword = () => {
+    setResetPasswordModal({ 
+      isOpen: false, 
+      userId: null, 
+      userName: '', 
+      newPassword: '',
+      confirmPassword: ''
+    });
+  };
+
   return (
     <div className="user-management">
       <div className="page-header">
@@ -312,6 +369,13 @@ const UserManagement = () => {
                           <Edit2 size={18} />
                         </button>
                         <button 
+                          className="action-btn btn-reset-password" 
+                          onClick={() => handleResetPasswordClick(user)}
+                          title="Reset Password"
+                        >
+                          <KeyRound size={18} />
+                        </button>
+                        <button 
                           className="action-btn btn-delete" 
                           onClick={() => handleDeleteClick(user._id)}
                           title="Delete"
@@ -380,32 +444,36 @@ const UserManagement = () => {
                   allowCustom={true}
                 />
               </div>
-              <div className="form-group">
-                <label>Password <span style={{color: 'red'}}>*</span></label>
-                <input
-                  type="password"
-                  value={newUser.password}
-                  onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
-                  required={!editingId}
-                  minLength={6}
-                  disabled={loading}
-                  placeholder={editingId ? 'Leave empty to keep current password' : 'Enter password'}
-                  autoComplete="new-password"
-                />
-              </div>
-              <div className="form-group">
-                <label>Confirm Password <span style={{color: 'red'}}>*</span></label>
-                <input
-                  type="password"
-                  value={newUser.confirmPassword}
-                  onChange={(e) => setNewUser({ ...newUser, confirmPassword: e.target.value })}
-                  required={!editingId || newUser.password !== ''}
-                  minLength={6}
-                  disabled={loading}
-                  placeholder={editingId ? 'Confirm new password' : 'Confirm password'}
-                  autoComplete="new-password"
-                />
-              </div>
+              {!editingId && (
+                <>
+                  <div className="form-group">
+                    <label>Password <span style={{color: 'red'}}>*</span></label>
+                    <input
+                      type="password"
+                      value={newUser.password}
+                      onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
+                      required
+                      minLength={6}
+                      disabled={loading}
+                      placeholder="Enter password"
+                      autoComplete="new-password"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Confirm Password <span style={{color: 'red'}}>*</span></label>
+                    <input
+                      type="password"
+                      value={newUser.confirmPassword}
+                      onChange={(e) => setNewUser({ ...newUser, confirmPassword: e.target.value })}
+                      required
+                      minLength={6}
+                      disabled={loading}
+                      placeholder="Confirm password"
+                      autoComplete="new-password"
+                    />
+                  </div>
+                </>
+              )}
               <div className="form-group">
                 <label>Role <span style={{color: 'red'}}>*</span></label>
                 <select
@@ -440,6 +508,67 @@ const UserManagement = () => {
         onCancel={handleCancelDelete}
         isDangerous={true}
       />
+
+      {/* Reset Password Modal */}
+      {resetPasswordModal.isOpen && (
+        <div className="modal-overlay" onClick={handleCancelResetPassword}>
+          <div className="modal-content reset-password-modal" onClick={(e) => e.stopPropagation()}>
+            <h2>
+              <KeyRound size={24} />
+              Reset Password
+            </h2>
+            <p className="reset-password-info">
+              Reset password for <strong>{resetPasswordModal.userName}</strong>. 
+              They will be required to change the password on their next login.
+            </p>
+            <div className="form-group">
+              <label>New Password <span style={{color: 'red'}}>*</span></label>
+              <input
+                type="password"
+                value={resetPasswordModal.newPassword}
+                onChange={(e) => setResetPasswordModal({
+                  ...resetPasswordModal,
+                  newPassword: e.target.value
+                })}
+                placeholder="Enter new password (min 6 characters)"
+                minLength={6}
+                autoComplete="new-password"
+              />
+            </div>
+            <div className="form-group">
+              <label>Confirm Password <span style={{color: 'red'}}>*</span></label>
+              <input
+                type="password"
+                value={resetPasswordModal.confirmPassword}
+                onChange={(e) => setResetPasswordModal({
+                  ...resetPasswordModal,
+                  confirmPassword: e.target.value
+                })}
+                placeholder="Confirm new password"
+                minLength={6}
+                autoComplete="new-password"
+              />
+            </div>
+            <div className="modal-buttons">
+              <button 
+                type="button" 
+                className="btn-cancel" 
+                onClick={handleCancelResetPassword}
+              >
+                Cancel
+              </button>
+              <button 
+                type="button" 
+                className="btn-submit btn-reset" 
+                onClick={handleResetPassword}
+                disabled={!resetPasswordModal.newPassword || resetPasswordModal.newPassword.length < 6}
+              >
+                Reset Password
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
