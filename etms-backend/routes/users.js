@@ -291,7 +291,7 @@ router.delete('/:id', auth, authorize('Admin'), async (req, res) => {
     }
 
     // Prevent deleting yourself
-    if (user._id.toString() === req.user._id.toString()) {
+    if (user._id.toString() === req.user.id.toString()) {
       return res.status(400).json({ message: 'Cannot delete your own account' });
     }
 
@@ -337,7 +337,7 @@ router.post('/:id/reset-password', auth, authorize('Admin'), [
     }
 
     // Prevent resetting own password through this route
-    if (user._id.toString() === req.user._id.toString()) {
+    if (user._id.toString() === req.user.id.toString()) {
       return res.status(400).json({ message: 'Cannot reset your own password. Use change password instead.' });
     }
 
@@ -412,7 +412,7 @@ router.get('/staff/list', auth, authorize('Admin', 'Manager'), async (req, res) 
     
     // If manager, filter by their department
     if (req.user.role === 'Manager') {
-      const manager = await Manager.findOne({ mid: req.user._id });
+      const manager = await Manager.findOne({ mid: req.user.id });
       if (manager && manager.department) {
         staffQuery.department = manager.department;
       }
@@ -451,7 +451,7 @@ router.get('/manager/staff', auth, authorize('Manager'), async (req, res) => {
     const { search } = req.query;
     
     // Get the manager's department
-    const manager = await Manager.findOne({ mid: req.user._id });
+    const manager = await Manager.findOne({ mid: req.user.id });
     if (!manager) {
       return res.status(404).json({ message: 'Manager profile not found' });
     }
@@ -518,7 +518,7 @@ router.post('/manager/staff', auth, authorize('Manager'), [
     const { name, user_name, email, password } = req.body;
 
     // Get the manager's department to auto-assign
-    const manager = await Manager.findOne({ mid: req.user._id });
+    const manager = await Manager.findOne({ mid: req.user.id });
     if (!manager) {
       return res.status(404).json({ message: 'Manager profile not found' });
     }
@@ -623,7 +623,7 @@ router.put('/manager/staff/:id', auth, authorize('Manager'), [
     }
 
     // Verify this staff member belongs to the manager's department
-    const manager = await Manager.findOne({ mid: req.user._id });
+    const manager = await Manager.findOne({ mid: req.user.id });
     const staffData = await Staff.findOne({ sid: user._id });
     if (!manager || !staffData || staffData.department !== manager.department) {
       return res.status(403).json({ message: 'You can only update staff members in your department' });

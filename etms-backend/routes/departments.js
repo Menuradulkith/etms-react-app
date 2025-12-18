@@ -58,7 +58,7 @@ router.post('/', auth, authorize('Admin'), [
     const department = new Department({
       name: name.trim(),
       description: description?.trim() || '',
-      createdBy: req.user._id
+      createdBy: req.user.id
     });
 
     await department.save();

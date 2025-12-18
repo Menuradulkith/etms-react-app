@@ -120,12 +120,12 @@ router.get('/subtasks', auth, async (req, res) => {
 
     // Role-based filtering
     if (req.user.role === 'Staff') {
-      const staff = await Staff.findOne({ sid: req.user._id });
+      const staff = await Staff.findOne({ sid: req.user.id });
       if (staff) query.assigned_to = staff._id;
     } else if (req.user.role === 'Manager') {
       // Manager should see subtasks for tasks assigned to them
       // This includes subtasks created by Admin (unassigned) and subtasks they created
-      const manager = await Manager.findOne({ mid: req.user._id });
+      const manager = await Manager.findOne({ mid: req.user.id });
       if (manager) {
         // Find all tasks assigned to this manager
         const managerTasks = await Task.find({ assigned_to: manager._id }).select('_id');
@@ -163,14 +163,14 @@ router.get('/stats', auth, async (req, res) => {
     let subtaskQuery = {};
 
     if (req.user.role === 'Manager') {
-      const manager = await Manager.findOne({ mid: req.user._id });
+      const manager = await Manager.findOne({ mid: req.user.id });
       if (manager) {
         taskQuery.assigned_to = manager._id;
         // Manager stats show only their tasks, not subtasks they created
         subtaskQuery._id = null; // This ensures no subtasks are counted for manager
       }
     } else if (req.user.role === 'Staff') {
-      const staff = await Staff.findOne({ sid: req.user._id });
+      const staff = await Staff.findOne({ sid: req.user.id });
       if (staff) subtaskQuery.assigned_to = staff._id;
     }
 
@@ -273,7 +273,7 @@ router.get('/', auth, async (req, res) => {
     }
 
     if (req.user.role === 'Manager') {
-      const manager = await Manager.findOne({ mid: req.user._id });
+      const manager = await Manager.findOne({ mid: req.user.id });
       if (manager) query.assigned_to = manager._id;
     } else if (req.user.role === 'Staff') {
       return res.json({ success: true, count: 0, tasks: [] });
@@ -377,7 +377,7 @@ router.post('/', auth, authorize('Admin'), [
       return res.status(404).json({ message: 'Assigned manager not found' });
     }
 
-    const admin = await Admin.findOne({ aid: req.user._id });
+    const admin = await Admin.findOne({ aid: req.user.id });
     if (!admin) {
       return res.status(404).json({ message: 'Admin record not found' });
     }
@@ -455,7 +455,7 @@ router.post('/subtasks', auth, authorize('Admin', 'Manager'), [
 
     if (req.user.role === 'Admin') {
       // Admin creates subtask without assignment
-      const admin = await Admin.findOne({ aid: req.user._id });
+      const admin = await Admin.findOne({ aid: req.user.id });
       if (!admin) {
         return res.status(404).json({ message: 'Admin not found' });
       }
@@ -463,7 +463,7 @@ router.post('/subtasks', auth, authorize('Admin', 'Manager'), [
       createdByModelType = 'Admin';
     } else if (req.user.role === 'Manager') {
       // Manager creates subtask with assignment
-      const manager = await Manager.findOne({ mid: req.user._id });
+      const manager = await Manager.findOne({ mid: req.user.id });
       if (!manager) {
         return res.status(404).json({ message: 'Manager not found' });
       }
@@ -558,7 +558,7 @@ router.put('/subtasks/:id/assign', auth, authorize('Manager'), async (req, res) 
     }
 
     // Verify manager is assigned to the parent task
-    const manager = await Manager.findOne({ mid: req.user._id });
+    const manager = await Manager.findOne({ mid: req.user.id });
     if (!manager) {
       return res.status(404).json({ message: 'Manager not found' });
     }
@@ -677,7 +677,7 @@ router.put('/:id/status', auth, [
     let updaterId = null;
 
     if (req.user.role === 'Manager') {
-      const manager = await Manager.findOne({ mid: req.user._id });
+      const manager = await Manager.findOne({ mid: req.user.id });
       if (task.assigned_to.toString() !== manager._id.toString()) {
         return res.status(403).json({ message: 'Not authorized to update this task' });
       }
@@ -685,7 +685,7 @@ router.put('/:id/status', auth, [
       updaterModel = 'Manager';
       updaterId = manager._id;
     } else if (req.user.role === 'Admin') {
-      const admin = await Admin.findOne({ aid: req.user._id });
+      const admin = await Admin.findOne({ aid: req.user.id });
       updaterName = admin?.name || 'Admin';
       updaterModel = 'Admin';
       updaterId = admin?._id;
@@ -793,7 +793,7 @@ router.put('/subtasks/:id', auth, authorize('Manager'), async (req, res) => {
     }
 
     // Verify manager owns this subtask
-    const manager = await Manager.findOne({ mid: req.user._id });
+    const manager = await Manager.findOne({ mid: req.user.id });
     if (subtask.createdBy.toString() !== manager._id.toString()) {
       return res.status(403).json({ message: 'Not authorized to update this subtask' });
     }
@@ -859,7 +859,7 @@ router.put('/subtasks/:id/status', auth, [
     let updaterId = null;
 
     if (req.user.role === 'Staff') {
-      const staff = await Staff.findOne({ sid: req.user._id });
+      const staff = await Staff.findOne({ sid: req.user.id });
       if (subtask.assigned_to.toString() !== staff._id.toString()) {
         return res.status(403).json({ message: 'Not authorized to update this subtask' });
       }
@@ -867,7 +867,7 @@ router.put('/subtasks/:id/status', auth, [
       updaterModel = 'Staff';
       updaterId = staff._id;
     } else if (req.user.role === 'Manager') {
-      const manager = await Manager.findOne({ mid: req.user._id });
+      const manager = await Manager.findOne({ mid: req.user.id });
       if (subtask.createdBy.toString() !== manager._id.toString()) {
         return res.status(403).json({ message: 'Not authorized to update this subtask' });
       }
@@ -875,7 +875,7 @@ router.put('/subtasks/:id/status', auth, [
       updaterModel = 'Manager';
       updaterId = manager._id;
     } else if (req.user.role === 'Admin') {
-      const admin = await Admin.findOne({ aid: req.user._id });
+      const admin = await Admin.findOne({ aid: req.user.id });
       updaterName = admin?.name || 'Admin';
       updaterModel = 'Admin';
       updaterId = admin?._id;
@@ -1075,7 +1075,7 @@ router.delete('/subtasks/:id', auth, authorize('Manager'), async (req, res) => {
       return res.status(404).json({ message: 'Subtask not found' });
     }
 
-    const manager = await Manager.findOne({ mid: req.user._id });
+    const manager = await Manager.findOne({ mid: req.user.id });
     if (subtask.createdBy.toString() !== manager._id.toString()) {
       return res.status(403).json({ message: 'Not authorized to delete this subtask' });
     }
@@ -1123,7 +1123,7 @@ router.post('/reports', auth, authorize('Staff', 'Manager'), [
       task_id,
       subtask_id: subtask_id || null,
       task_name: task.task_name,
-      submitted_by: req.user._id,
+      submitted_by: req.user.id,
       comment,
       date: new Date()
     });
@@ -1164,7 +1164,7 @@ router.post('/subtasks/:id/attachments', auth, authorize('Admin', 'Manager'), up
 
     // Verify authorization - Admin can always add, Manager must have created or be assigned to parent task
     if (req.user.role === 'Manager') {
-      const manager = await Manager.findOne({ mid: req.user._id });
+      const manager = await Manager.findOne({ mid: req.user.id });
       // Manager can add attachments if they created the subtask OR if they're assigned to the parent task
       const parentTask = await Task.findById(subtask.task_id);
       const isCreator = manager && subtask.createdBy && subtask.createdBy.toString() === manager._id.toString();
@@ -1181,12 +1181,12 @@ router.post('/subtasks/:id/attachments', auth, authorize('Admin', 'Manager'), up
     // Get uploader info
     let uploaderId, uploaderModel, uploaderName;
     if (req.user.role === 'Admin') {
-      const admin = await Admin.findOne({ aid: req.user._id });
+      const admin = await Admin.findOne({ aid: req.user.id });
       uploaderId = admin?._id;
       uploaderModel = 'Admin';
       uploaderName = admin?.name || 'Admin';
     } else if (req.user.role === 'Manager') {
-      const manager = await Manager.findOne({ mid: req.user._id });
+      const manager = await Manager.findOne({ mid: req.user.id });
       uploaderId = manager?._id;
       uploaderModel = 'Manager';
       uploaderName = manager?.name || 'Manager';
@@ -1321,12 +1321,12 @@ router.get('/subtasks/:id/attachments', auth, async (req, res) => {
 
     // Check access - Manager who created or Staff assigned
     if (req.user.role === 'Manager') {
-      const manager = await Manager.findOne({ mid: req.user._id });
+      const manager = await Manager.findOne({ mid: req.user.id });
       if (!manager || subtask.createdBy.toString() !== manager._id.toString()) {
         return res.status(403).json({ message: 'Not authorized to access attachments' });
       }
     } else if (req.user.role === 'Staff') {
-      const staff = await Staff.findOne({ sid: req.user._id });
+      const staff = await Staff.findOne({ sid: req.user.id });
       if (!staff || subtask.assigned_to.toString() !== staff._id.toString()) {
         return res.status(403).json({ message: 'Not authorized to access attachments' });
       }
@@ -1356,12 +1356,12 @@ router.get('/subtasks/:id/attachments/:attachmentId', auth, async (req, res) => 
 
     // Check access - Manager who created or Staff assigned
     if (req.user.role === 'Manager') {
-      const manager = await Manager.findOne({ mid: req.user._id });
+      const manager = await Manager.findOne({ mid: req.user.id });
       if (!manager || subtask.createdBy.toString() !== manager._id.toString()) {
         return res.status(403).json({ message: 'Not authorized to access this attachment' });
       }
     } else if (req.user.role === 'Staff') {
-      const staff = await Staff.findOne({ sid: req.user._id });
+      const staff = await Staff.findOne({ sid: req.user.id });
       if (!staff || subtask.assigned_to.toString() !== staff._id.toString()) {
         return res.status(403).json({ message: 'Not authorized to access this attachment' });
       }
@@ -1398,7 +1398,7 @@ router.delete('/subtasks/:id/attachments/:attachmentId', auth, authorize('Admin'
 
     // Verify authorization - Admin can always delete, Manager must have created or be assigned to parent task
     if (req.user.role === 'Manager') {
-      const manager = await Manager.findOne({ mid: req.user._id });
+      const manager = await Manager.findOne({ mid: req.user.id });
       const parentTask = await Task.findById(subtask.task_id);
       const isCreator = manager && subtask.createdBy && subtask.createdBy.toString() === manager._id.toString();
       const isAssignedManager = manager && parentTask && parentTask.assigned_to && parentTask.assigned_to.toString() === manager._id.toString();
@@ -1450,7 +1450,7 @@ router.post('/:id/attachments', auth, authorize('Admin'), upload.array('attachme
     }
 
     // Get uploader info (Admin)
-    const admin = await Admin.findOne({ aid: req.user._id });
+    const admin = await Admin.findOne({ aid: req.user.id });
     const uploaderId = admin?._id;
     const uploaderName = admin?.name || 'Admin';
     
@@ -1496,7 +1496,7 @@ router.get('/:id/attachments/:attachmentId', auth, async (req, res) => {
 
     // Check access - Admin or assigned Manager
     if (req.user.role === 'Manager') {
-      const manager = await Manager.findOne({ mid: req.user._id });
+      const manager = await Manager.findOne({ mid: req.user.id });
       if (!manager || task.assigned_to.toString() !== manager._id.toString()) {
         return res.status(403).json({ message: 'Not authorized to access this attachment' });
       }
@@ -1569,7 +1569,7 @@ router.get('/:id/attachments', auth, async (req, res) => {
 
     // Check access - Admin or assigned Manager
     if (req.user.role === 'Manager') {
-      const manager = await Manager.findOne({ mid: req.user._id });
+      const manager = await Manager.findOne({ mid: req.user.id });
       if (!manager || task.assigned_to.toString() !== manager._id.toString()) {
         return res.status(403).json({ message: 'Not authorized to access attachments' });
       }
@@ -1610,7 +1610,7 @@ router.post('/:id/comments', auth, authorize('Admin', 'Manager'), async (req, re
     let commentBy, commentByModel, commentByName;
 
     if (req.user.role === 'Admin') {
-      const admin = await Admin.findOne({ aid: req.user._id });
+      const admin = await Admin.findOne({ aid: req.user.id });
       if (!admin) {
         return res.status(403).json({ message: 'Admin not found' });
       }
@@ -1618,7 +1618,7 @@ router.post('/:id/comments', auth, authorize('Admin', 'Manager'), async (req, re
       commentByModel = 'Admin';
       commentByName = admin.name;
     } else if (req.user.role === 'Manager') {
-      const manager = await Manager.findOne({ mid: req.user._id });
+      const manager = await Manager.findOne({ mid: req.user.id });
       if (!manager || task.assigned_to.toString() !== manager._id.toString()) {
         return res.status(403).json({ message: 'Not authorized to comment on this task' });
       }
@@ -1709,7 +1709,7 @@ router.get('/:id/comments', auth, async (req, res) => {
 
     // Check access
     if (req.user.role === 'Manager') {
-      const manager = await Manager.findOne({ mid: req.user._id });
+      const manager = await Manager.findOne({ mid: req.user.id });
       if (!manager || task.assigned_to.toString() !== manager._id.toString()) {
         return res.status(403).json({ message: 'Not authorized to view comments' });
       }
@@ -1752,7 +1752,7 @@ router.post('/subtasks/:id/comments', auth, async (req, res) => {
 
     if (req.user.role === 'Staff') {
       // Verify the staff is assigned to this subtask
-      const staff = await Staff.findOne({ sid: req.user._id });
+      const staff = await Staff.findOne({ sid: req.user.id });
       if (!staff || !subtask.assigned_to || subtask.assigned_to.toString() !== staff._id.toString()) {
         return res.status(403).json({ message: 'Not authorized to comment on this subtask' });
       }
@@ -1769,7 +1769,7 @@ router.post('/subtasks/:id/comments', auth, async (req, res) => {
         notifyRecipients.push({ id: parentTask.createdBy, model: 'Admin' });
       }
     } else if (req.user.role === 'Manager') {
-      const manager = await Manager.findOne({ mid: req.user._id });
+      const manager = await Manager.findOne({ mid: req.user.id });
       // Manager can comment if assigned to parent task
       const parentTask = await Task.findById(subtask.task_id);
       if (!manager || !parentTask || parentTask.assigned_to.toString() !== manager._id.toString()) {
@@ -1787,7 +1787,7 @@ router.post('/subtasks/:id/comments', auth, async (req, res) => {
         notifyRecipients.push({ id: parentTask.createdBy, model: 'Admin' });
       }
     } else if (req.user.role === 'Admin') {
-      const admin = await Admin.findOne({ aid: req.user._id });
+      const admin = await Admin.findOne({ aid: req.user.id });
       commenterId = admin._id;
       commenterModel = 'Admin';
       commenterName = admin?.name || 'Admin';
@@ -1866,12 +1866,12 @@ router.get('/subtasks/:id/comments', auth, async (req, res) => {
 
     // Check access
     if (req.user.role === 'Staff') {
-      const staff = await Staff.findOne({ sid: req.user._id });
+      const staff = await Staff.findOne({ sid: req.user.id });
       if (!staff || !subtask.assigned_to || subtask.assigned_to.toString() !== staff._id.toString()) {
         return res.status(403).json({ message: 'Not authorized to view comments' });
       }
     } else if (req.user.role === 'Manager') {
-      const manager = await Manager.findOne({ mid: req.user._id });
+      const manager = await Manager.findOne({ mid: req.user.id });
       // Manager can view if assigned to parent task
       const parentTask = subtask.task_id;
       if (!manager || !parentTask || parentTask.assigned_to?.toString() !== manager._id.toString()) {
@@ -1906,7 +1906,7 @@ router.post('/:id/manager-attachments', auth, authorize('Manager'), upload.array
     }
 
     // Verify the manager is assigned to this task
-    const manager = await Manager.findOne({ mid: req.user._id });
+    const manager = await Manager.findOne({ mid: req.user.id });
     if (!manager || task.assigned_to.toString() !== manager._id.toString()) {
       return res.status(403).json({ message: 'Not authorized to add attachments to this task' });
     }
@@ -1977,7 +1977,7 @@ router.post('/subtasks/:id/staff-attachments', auth, authorize('Staff'), upload.
     }
 
     // Verify the staff is assigned to this subtask
-    const staff = await Staff.findOne({ sid: req.user._id });
+    const staff = await Staff.findOne({ sid: req.user.id });
     if (!staff || subtask.assigned_to.toString() !== staff._id.toString()) {
       return res.status(403).json({ message: 'Not authorized to add attachments to this subtask' });
     }

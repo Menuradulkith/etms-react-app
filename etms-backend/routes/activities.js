@@ -20,10 +20,10 @@ router.get('/', auth, async (req, res) => {
       query = { userRole: 'Admin' };
     } else if (req.user.role === 'Manager') {
       // Manager sees only their own activities
-      query = { userId: req.user._id };
+      query = { userId: req.user.id };
     } else if (req.user.role === 'Staff') {
       // Staff sees only their own activities
-      query = { userId: req.user._id };
+      query = { userId: req.user.id };
     }
 
     const activities = await Activity.find(query)
@@ -50,7 +50,7 @@ router.post('/', auth, async (req, res) => {
     const activity = new Activity({
       type,
       description,
-      userId: req.user._id,
+      userId: req.user.id,
       userName: req.user.user_name,
       userRole: req.user.role,
       relatedId,

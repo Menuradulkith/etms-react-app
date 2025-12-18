@@ -17,14 +17,14 @@ router.get('/', auth, authorize('Admin', 'Manager'), async (req, res) => {
     let recipientModel;
     
     if (req.user.role === 'Admin') {
-      const admin = await Admin.findOne({ aid: req.user._id });
+      const admin = await Admin.findOne({ aid: req.user.id });
       if (!admin) {
         return res.status(404).json({ message: 'Admin profile not found' });
       }
       recipientId = admin._id;
       recipientModel = 'Admin';
     } else if (req.user.role === 'Manager') {
-      const manager = await Manager.findOne({ mid: req.user._id });
+      const manager = await Manager.findOne({ mid: req.user.id });
       if (!manager) {
         return res.status(404).json({ message: 'Manager profile not found' });
       }
@@ -69,14 +69,14 @@ router.get('/unread-count', auth, authorize('Admin', 'Manager'), async (req, res
     let recipientModel;
     
     if (req.user.role === 'Admin') {
-      const admin = await Admin.findOne({ aid: req.user._id });
+      const admin = await Admin.findOne({ aid: req.user.id });
       if (!admin) {
         return res.status(404).json({ message: 'Admin profile not found' });
       }
       recipientId = admin._id;
       recipientModel = 'Admin';
     } else if (req.user.role === 'Manager') {
-      const manager = await Manager.findOne({ mid: req.user._id });
+      const manager = await Manager.findOne({ mid: req.user.id });
       if (!manager) {
         return res.status(404).json({ message: 'Manager profile not found' });
       }
@@ -114,10 +114,10 @@ router.put('/:id/read', auth, authorize('Admin', 'Manager'), async (req, res) =>
     // Verify ownership
     let recipientId;
     if (req.user.role === 'Admin') {
-      const admin = await Admin.findOne({ aid: req.user._id });
+      const admin = await Admin.findOne({ aid: req.user.id });
       recipientId = admin?._id;
     } else {
-      const manager = await Manager.findOne({ mid: req.user._id });
+      const manager = await Manager.findOne({ mid: req.user.id });
       recipientId = manager?._id;
     }
 
@@ -149,11 +149,11 @@ router.put('/mark-all-read', auth, authorize('Admin', 'Manager'), async (req, re
     let recipientModel;
     
     if (req.user.role === 'Admin') {
-      const admin = await Admin.findOne({ aid: req.user._id });
+      const admin = await Admin.findOne({ aid: req.user.id });
       recipientId = admin?._id;
       recipientModel = 'Admin';
     } else {
-      const manager = await Manager.findOne({ mid: req.user._id });
+      const manager = await Manager.findOne({ mid: req.user.id });
       recipientId = manager?._id;
       recipientModel = 'Manager';
     }
@@ -187,10 +187,10 @@ router.delete('/:id', auth, authorize('Admin', 'Manager'), async (req, res) => {
     // Verify ownership
     let recipientId;
     if (req.user.role === 'Admin') {
-      const admin = await Admin.findOne({ aid: req.user._id });
+      const admin = await Admin.findOne({ aid: req.user.id });
       recipientId = admin?._id;
     } else {
-      const manager = await Manager.findOne({ mid: req.user._id });
+      const manager = await Manager.findOne({ mid: req.user.id });
       recipientId = manager?._id;
     }
 
@@ -219,11 +219,11 @@ router.delete('/clear-all', auth, authorize('Admin', 'Manager'), async (req, res
     let recipientModel;
     
     if (req.user.role === 'Admin') {
-      const admin = await Admin.findOne({ aid: req.user._id });
+      const admin = await Admin.findOne({ aid: req.user.id });
       recipientId = admin?._id;
       recipientModel = 'Admin';
     } else {
-      const manager = await Manager.findOne({ mid: req.user._id });
+      const manager = await Manager.findOne({ mid: req.user.id });
       recipientId = manager?._id;
       recipientModel = 'Manager';
     }
