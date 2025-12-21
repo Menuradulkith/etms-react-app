@@ -14,7 +14,7 @@ import './AllTasks.css';
 const AllTasks = () => {
   const toast = useToast();
   const { user } = useAuth();
-  const { departments } = useDepartments();
+  const { departments, fetchDepartments } = useDepartments();
   const chatEndRef = useRef(null);
   const [tasks, setTasks] = useState([]);
   const [filteredTasks, setFilteredTasks] = useState([]);
@@ -86,6 +86,10 @@ const AllTasks = () => {
     fetchTasks();
     fetchManagers();
   }, []);
+
+  useEffect(() => {
+    fetchDepartments();
+  }, [fetchDepartments]);
 
   // Check for notification redirect and open task/subtask modal
   useEffect(() => {
@@ -651,7 +655,7 @@ const AllTasks = () => {
           >
             <option value="All">All Departments</option>
             {departments.map((dept) => (
-              <option key={dept._id} value={dept.name}>{dept.name}</option>
+              <option key={dept} value={dept}>{dept}</option>
             ))}
           </select>
         </div>
