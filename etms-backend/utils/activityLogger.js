@@ -15,8 +15,8 @@ const logActivity = async ({ type, description, user, relatedId, relatedModel, m
     const activity = new Activity({
       type,
       description,
-      userId: user._id,
-      userName: user.user_name,
+      userId: user.id || user._id, // Support both req.user.id and direct user._id
+      userName: user.user_name || user.name,
       userRole: user.role,
       relatedId,
       relatedModel,
