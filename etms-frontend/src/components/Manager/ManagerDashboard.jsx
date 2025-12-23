@@ -2306,7 +2306,7 @@ const AssignedTasks = () => {
                     type="date"
                     value={editFormData.dueDate}
                     onChange={(e) => setEditFormData({ ...editFormData, dueDate: e.target.value })}
-                    required
+                    disabled={true}
                   />
                 </div>
 

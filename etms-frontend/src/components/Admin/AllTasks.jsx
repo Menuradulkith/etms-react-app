@@ -855,7 +855,7 @@ const AllTasks = () => {
                     onChange={(date) => setEditFormData({ ...editFormData, dueDate: date })}
                     dateFormat="MM-dd-yyyy"
                     className="date-picker"
-                    disabled={loading}
+                    disabled={true}
                   />
                 </div>
 
