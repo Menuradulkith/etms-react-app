@@ -2541,6 +2541,7 @@ const CreateSubtask = () => {
               type="date"
               value={formData.dueDate.toISOString().split('T')[0]}
               onChange={(e) => setFormData({ ...formData, dueDate: new Date(e.target.value) })}
+              min={new Date().toISOString().split('T')[0]}
               required
               disabled={loading}
             />

@@ -183,6 +183,7 @@ const CreateTask = () => {
               dateFormat="MM-dd-yyyy"
               className="date-picker"
               disabled={loading}
+              minDate={new Date()}
             />
           </div>
 
