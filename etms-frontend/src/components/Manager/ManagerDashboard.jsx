@@ -391,7 +391,15 @@ const MyTasks = () => {
     let filtered = tasks;
 
     if (statusFilter !== 'All') {
-      filtered = filtered.filter(task => task.status === statusFilter);
+      if (statusFilter === 'Overdue') {
+        filtered = filtered.filter(task => 
+          new Date(task.dueDate) < new Date() && 
+          task.status !== 'Completed' && 
+          task.status !== 'Cancelled'
+        );
+      } else {
+        filtered = filtered.filter(task => task.status === statusFilter);
+      }
     }
 
     if (searchTerm.trim() !== '') {
@@ -510,7 +518,25 @@ const MyTasks = () => {
     }
   };
 
-  const getStatusClass = (status) => {
+  // Helper function to check if task/subtask is overdue
+  const isOverdue = (dueDate, status) => {
+    if (status === 'Completed' || status === 'Cancelled') return false;
+    return new Date(dueDate) < new Date();
+  };
+
+  // Get display status (shows Overdue instead of Pending/In Progress if overdue)
+  const getDisplayStatus = (status, dueDate) => {
+    if (isOverdue(dueDate, status)) {
+      return 'Overdue';
+    }
+    return status;
+  };
+
+  const getStatusClass = (status, dueDate) => {
+    // Check for overdue first
+    if (dueDate && isOverdue(dueDate, status)) {
+      return 'overdue';
+    }
     switch(status) {
       case 'Pending': return 'pending';
       case 'In Progress': return 'in-progress';
@@ -746,6 +772,7 @@ const MyTasks = () => {
             <option value="Pending">Pending</option>
             <option value="In Progress">In Progress</option>
             <option value="Completed">Completed</option>
+            <option value="Overdue">Overdue</option>
           </select>
         </div>
       </div>
@@ -807,22 +834,30 @@ const MyTasks = () => {
                       </button>
                     </td>
                     <td>
-                      <span className={`status-badge status-${task.status.toLowerCase().replace(' ', '-')}`}>
-                        {task.status}
+                      <span className={`status-badge status-${getStatusClass(task.status, task.dueDate)}`}>
+                        {getDisplayStatus(task.status, task.dueDate)}
                       </span>
                     </td>
                     <td>
                       <div className="action-buttons">
-                        <select 
-                          value={task.status} 
-                          onChange={(e) => handleStatusUpdate(task._id, e.target.value)}
-                          onClick={(e) => e.stopPropagation()}
-                          className="status-select"
-                        >
-                          <option value="Pending">Pending</option>
-                          <option value="In Progress">In Progress</option>
-                          <option value="Completed">Completed</option>
-                        </select>
+                        {task.status === 'Completed' || task.status === 'Cancelled' ? (
+                          <span className="status-locked" title={`Task is ${task.status}. Only Admin can change.`}>
+                            {task.status === 'Completed' ? '✓ Completed' : '✗ Cancelled'}
+                          </span>
+                        ) : (
+                          <select 
+                            value={task.status} 
+                            onChange={(e) => handleStatusUpdate(task._id, e.target.value)}
+                            onClick={(e) => e.stopPropagation()}
+                            className="status-select"
+                            disabled={isOverdue(task.dueDate, task.status)}
+                            title={isOverdue(task.dueDate, task.status) ? 'Task is overdue. Contact Admin.' : ''}
+                          >
+                            <option value="Pending">Pending</option>
+                            <option value="In Progress">In Progress</option>
+                            <option value="Completed">Completed</option>
+                          </select>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -854,8 +889,8 @@ const MyTasks = () => {
                         </button>
                       </td>
                       <td>
-                        <span className={`status-badge status-${subtask.status?.toLowerCase().replace(' ', '-')}`}>
-                          {subtask.status}
+                        <span className={`status-badge status-${getStatusClass(subtask.status, subtask.dueDate)}`}>
+                          {getDisplayStatus(subtask.status, subtask.dueDate)}
                         </span>
                       </td>
                       <td>
@@ -985,8 +1020,8 @@ const MyTasks = () => {
 
                 <div className="view-task-row">
                   <label>Status:</label>
-                  <span className={`status-badge ${getStatusClass(viewingTask.status)}`}>
-                    {viewingTask.status}
+                  <span className={`status-badge ${getStatusClass(viewingTask.status, viewingTask.dueDate)}`}>
+                    {getDisplayStatus(viewingTask.status, viewingTask.dueDate)}
                   </span>
                 </div>
               </div>
@@ -1271,8 +1306,8 @@ const MyTasks = () => {
 
               <div className="view-task-row">
                 <label>Status:</label>
-                <span className={`status-badge status-${viewingSubtask.status?.toLowerCase().replace(' ', '-')}`}>
-                  {viewingSubtask.status}
+                <span className={`status-badge status-${getStatusClass(viewingSubtask.status, viewingSubtask.dueDate)}`}>
+                  {getDisplayStatus(viewingSubtask.status, viewingSubtask.dueDate)}
                 </span>
               </div>
 
@@ -1543,7 +1578,15 @@ const AssignedTasks = () => {
       let filteredSubtasks = task.subtasks;
 
       if (statusFilter !== 'All') {
-        filteredSubtasks = filteredSubtasks.filter(st => st.status === statusFilter);
+        if (statusFilter === 'Overdue') {
+          filteredSubtasks = filteredSubtasks.filter(st => 
+            new Date(st.dueDate) < new Date() && 
+            st.status !== 'Completed' && 
+            st.status !== 'Cancelled'
+          );
+        } else {
+          filteredSubtasks = filteredSubtasks.filter(st => st.status === statusFilter);
+        }
       }
 
       if (staffFilter !== 'All') {
@@ -1715,7 +1758,20 @@ const AssignedTasks = () => {
     }
   };
 
-  const getStatusClass = (status) => {
+  // Check if a task/subtask is overdue
+  const isOverdue = (dueDate, status) => {
+    if (status === 'Completed' || status === 'Cancelled') return false;
+    return new Date(dueDate) < new Date();
+  };
+
+  // Get display status (shows Overdue if applicable)
+  const getDisplayStatus = (status, dueDate) => {
+    if (isOverdue(dueDate, status)) return 'Overdue';
+    return status;
+  };
+
+  const getStatusClass = (status, dueDate) => {
+    if (isOverdue(dueDate, status)) return 'overdue';
     switch(status) {
       case 'Pending': return 'pending';
       case 'In Progress': return 'in-progress';
@@ -1845,6 +1901,7 @@ const AssignedTasks = () => {
             <option value="Pending">Pending</option>
             <option value="In Progress">In Progress</option>
             <option value="Completed">Completed</option>
+            <option value="Overdue">Overdue</option>
           </select>
         </div>
         <div className="status-filter">
@@ -1885,8 +1942,8 @@ const AssignedTasks = () => {
                   <span className={`priority-badge priority-${task.priority?.toLowerCase() || 'medium'}`}>
                     {task.priority || 'Medium'}
                   </span>
-                  <span className={`status-badge status-${task.status?.toLowerCase().replace(' ', '-')}`}>
-                    {task.status}
+                  <span className={`status-badge status-${getStatusClass(task.status, task.dueDate)}`}>
+                    {getDisplayStatus(task.status, task.dueDate)}
                   </span>
                 </div>
                 <div className="task-group-count">
@@ -1963,8 +2020,8 @@ const AssignedTasks = () => {
                             </button>
                           </td>
                           <td>
-                            <span className={`status-badge status-${subtask.status?.toLowerCase().replace(' ', '-')}`}>
-                              {subtask.status}
+                            <span className={`status-badge status-${getStatusClass(subtask.status, subtask.dueDate)}`}>
+                              {getDisplayStatus(subtask.status, subtask.dueDate)}
                             </span>
                           </td>
                           <td>
@@ -2158,8 +2215,8 @@ const AssignedTasks = () => {
 
                 <div className="view-task-row">
                   <label>Status:</label>
-                  <span className={`status-badge ${getStatusClass(viewingSubtask.status)}`}>
-                    {viewingSubtask.status}
+                  <span className={`status-badge ${getStatusClass(viewingSubtask.status, viewingSubtask.dueDate)}`}>
+                    {getDisplayStatus(viewingSubtask.status, viewingSubtask.dueDate)}
                   </span>
                 </div>
 
@@ -2701,13 +2758,34 @@ const StaffReports = () => {
     }
     
     if (selectedStatus !== 'All') {
-      filtered = filtered.filter(st => st.status === selectedStatus);
+      if (selectedStatus === 'Overdue') {
+        filtered = filtered.filter(st => 
+          new Date(st.dueDate) < new Date() && 
+          st.status !== 'Completed' && 
+          st.status !== 'Cancelled'
+        );
+      } else {
+        filtered = filtered.filter(st => st.status === selectedStatus);
+      }
     }
     
     return filtered;
   };
 
-  const getStatusClass = (status) => {
+  // Check if a task/subtask is overdue
+  const isOverdue = (dueDate, status) => {
+    if (status === 'Completed' || status === 'Cancelled') return false;
+    return new Date(dueDate) < new Date();
+  };
+
+  // Get display status (shows Overdue if applicable)
+  const getDisplayStatus = (status, dueDate) => {
+    if (isOverdue(dueDate, status)) return 'Overdue';
+    return status;
+  };
+
+  const getStatusClass = (status, dueDate) => {
+    if (isOverdue(dueDate, status)) return 'overdue';
     switch(status) {
       case 'Pending': return 'pending';
       case 'In Progress': return 'in-progress';
@@ -2876,6 +2954,7 @@ const StaffReports = () => {
             <option value="Pending">Pending</option>
             <option value="In Progress">In Progress</option>
             <option value="Completed">Completed</option>
+            <option value="Overdue">Overdue</option>
           </select>
         </div>
       </div>
@@ -2916,8 +2995,8 @@ const StaffReports = () => {
                       </span>
                     </td>
                     <td>
-                      <span className={`status-badge ${getStatusClass(subtask.status)}`}>
-                        {subtask.status}
+                      <span className={`status-badge ${getStatusClass(subtask.status, subtask.dueDate)}`}>
+                        {getDisplayStatus(subtask.status, subtask.dueDate)}
                       </span>
                     </td>
                     <td>{new Date(subtask.createdAt).toLocaleDateString()}</td>

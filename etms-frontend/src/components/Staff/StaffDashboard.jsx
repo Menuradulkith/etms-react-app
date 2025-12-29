@@ -309,7 +309,26 @@ const MyAssignedTasks = () => {
     let filtered = subtasks;
 
     if (statusFilter !== 'All') {
-      filtered = filtered.filter(st => st.status === statusFilter);
+      if (statusFilter === 'Overdue') {
+        // Show only overdue subtasks (past due date and not completed/cancelled)
+        filtered = filtered.filter(st => 
+          new Date(st.dueDate) < new Date() && 
+          st.status !== 'Completed' && 
+          st.status !== 'Cancelled'
+        );
+      } else {
+        // For other statuses, exclude overdue from Pending/In Progress
+        filtered = filtered.filter(st => {
+          const isTaskOverdue = new Date(st.dueDate) < new Date() && 
+            st.status !== 'Completed' && 
+            st.status !== 'Cancelled';
+          
+          if (isTaskOverdue && (statusFilter === 'Pending' || statusFilter === 'In Progress')) {
+            return false;
+          }
+          return st.status === statusFilter;
+        });
+      }
     }
 
     if (priorityFilter !== 'All') {
@@ -479,7 +498,25 @@ const MyAssignedTasks = () => {
     }
   };
 
-  const getStatusClass = (status) => {
+  // Helper function to check if task/subtask is overdue
+  const isOverdue = (dueDate, status) => {
+    if (status === 'Completed' || status === 'Cancelled') return false;
+    return new Date(dueDate) < new Date();
+  };
+
+  // Get display status (shows Overdue instead of Pending/In Progress if overdue)
+  const getDisplayStatus = (status, dueDate) => {
+    if (isOverdue(dueDate, status)) {
+      return 'Overdue';
+    }
+    return status;
+  };
+
+  const getStatusClass = (status, dueDate) => {
+    // Check for overdue first
+    if (dueDate && isOverdue(dueDate, status)) {
+      return 'overdue';
+    }
     switch(status) {
       case 'Pending': return 'pending';
       case 'In Progress': return 'in-progress';
@@ -515,6 +552,7 @@ const MyAssignedTasks = () => {
             <option value="All">All Status</option>
             <option value="Pending">Pending</option>
             <option value="In Progress">In Progress</option>
+            <option value="Overdue">Overdue</option>
           </select>
         </div>
         <div className="status-filter">
@@ -579,21 +617,29 @@ const MyAssignedTasks = () => {
                     </button>
                   </td>
                   <td>
-                    <span className={`status-badge status-${subtask.status.toLowerCase().replace(' ', '-')}`}>
-                      {subtask.status}
+                    <span className={`status-badge status-${getStatusClass(subtask.status, subtask.dueDate)}`}>
+                      {getDisplayStatus(subtask.status, subtask.dueDate)}
                     </span>
                   </td>
                   <td>
-                    <select 
-                      value={subtask.status} 
-                      onChange={(e) => handleStatusUpdate(subtask._id, e.target.value)}
-                      onClick={(e) => e.stopPropagation()}
-                      className="status-select"
-                    >
-                      <option value="Pending">Pending</option>
-                      <option value="In Progress">In Progress</option>
-                      <option value="Completed">Completed</option>
-                    </select>
+                    {subtask.status === 'Completed' || subtask.status === 'Cancelled' ? (
+                      <span className="status-locked" title={`Task is ${subtask.status}. Only Admin can change.`}>
+                        {subtask.status === 'Completed' ? '✓ Completed' : '✗ Cancelled'}
+                      </span>
+                    ) : (
+                      <select 
+                        value={subtask.status} 
+                        onChange={(e) => handleStatusUpdate(subtask._id, e.target.value)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="status-select"
+                        disabled={isOverdue(subtask.dueDate, subtask.status)}
+                        title={isOverdue(subtask.dueDate, subtask.status) ? 'Task is overdue. Contact Admin.' : ''}
+                      >
+                        <option value="Pending">Pending</option>
+                        <option value="In Progress">In Progress</option>
+                        <option value="Completed">Completed</option>
+                      </select>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -699,8 +745,8 @@ const MyAssignedTasks = () => {
 
                 <div className="view-task-row">
                   <label>Status:</label>
-                  <span className={`status-badge ${getStatusClass(viewingSubtask.status)}`}>
-                    {viewingSubtask.status}
+                  <span className={`status-badge ${getStatusClass(viewingSubtask.status, viewingSubtask.dueDate)}`}>
+                    {getDisplayStatus(viewingSubtask.status, viewingSubtask.dueDate)}
                   </span>
                 </div>
               </div>

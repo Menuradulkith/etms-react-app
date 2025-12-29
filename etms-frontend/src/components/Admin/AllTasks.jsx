@@ -145,7 +145,26 @@ const AllTasks = () => {
 
     // Filter by status
     if (status !== 'All') {
-      filtered = filtered.filter(task => task.status === status);
+      if (status === 'Overdue') {
+        // Show only overdue tasks (past due date and not completed/cancelled)
+        filtered = filtered.filter(task => 
+          new Date(task.dueDate) < new Date() && 
+          task.status !== 'Completed' && 
+          task.status !== 'Cancelled'
+        );
+      } else {
+        // For other statuses, exclude overdue tasks from Pending/In Progress
+        filtered = filtered.filter(task => {
+          const taskIsOverdue = new Date(task.dueDate) < new Date() && 
+            task.status !== 'Completed' && 
+            task.status !== 'Cancelled';
+          
+          if (taskIsOverdue && (status === 'Pending' || status === 'In Progress')) {
+            return false; // Don't show overdue tasks in Pending/In Progress filter
+          }
+          return task.status === status;
+        });
+      }
     }
 
     // Filter by department (based on assigned manager's department)
@@ -516,7 +535,25 @@ const AllTasks = () => {
     return comment.commentByModel === 'Admin';
   };
 
-  const getStatusClass = (status) => {
+  // Helper function to check if task/subtask is overdue
+  const isOverdue = (dueDate, status) => {
+    if (status === 'Completed' || status === 'Cancelled') return false;
+    return new Date(dueDate) < new Date();
+  };
+
+  // Get display status (shows Overdue instead of Pending/In Progress if overdue)
+  const getDisplayStatus = (status, dueDate) => {
+    if (isOverdue(dueDate, status)) {
+      return 'Overdue';
+    }
+    return status;
+  };
+
+  const getStatusClass = (status, dueDate) => {
+    // Check for overdue first
+    if (dueDate && isOverdue(dueDate, status)) {
+      return 'overdue';
+    }
     switch(status) {
       case 'Pending':
         return 'pending';
@@ -672,6 +709,7 @@ const AllTasks = () => {
             <option value="In Progress">In Progress</option>
             <option value="Completed">Completed</option>
             <option value="Cancelled">Cancelled</option>
+            <option value="Overdue">Overdue</option>
           </select>
         </div>
       </div>
@@ -730,8 +768,8 @@ const AllTasks = () => {
                       <td>{format(new Date(task.dueDate), 'MM-dd-yyyy')}</td>
                       <td>{task.priority}</td>
                       <td>
-                        <span className={`status-badge ${getStatusClass(task.status)}`}>
-                          {task.status}
+                        <span className={`status-badge ${getStatusClass(task.status, task.dueDate)}`}>
+                          {getDisplayStatus(task.status, task.dueDate)}
                         </span>
                       </td>
                       <td>
@@ -793,8 +831,8 @@ const AllTasks = () => {
                         <td>{format(new Date(subtask.dueDate), 'MM-dd-yyyy')}</td>
                         <td>{subtask.priority}</td>
                         <td>
-                          <span className={`status-badge ${getStatusClass(subtask.status)}`}>
-                            {subtask.status}
+                          <span className={`status-badge ${getStatusClass(subtask.status, subtask.dueDate)}`}>
+                            {getDisplayStatus(subtask.status, subtask.dueDate)}
                           </span>
                         </td>
                         <td>
@@ -1098,8 +1136,8 @@ const AllTasks = () => {
 
                 <div className="view-task-row">
                   <label>Status:</label>
-                  <span className={`status-badge ${getStatusClass(viewingTask.status)}`}>
-                    {viewingTask.status}
+                  <span className={`status-badge ${getStatusClass(viewingTask.status, viewingTask.dueDate)}`}>
+                    {getDisplayStatus(viewingTask.status, viewingTask.dueDate)}
                   </span>
                 </div>
               </div>
@@ -1344,8 +1382,8 @@ const AllTasks = () => {
 
                 <div className="view-task-row">
                   <label>Status:</label>
-                  <span className={`status-badge ${getStatusClass(viewingSubtask.status)}`}>
-                    {viewingSubtask.status}
+                  <span className={`status-badge ${getStatusClass(viewingSubtask.status, viewingSubtask.dueDate)}`}>
+                    {getDisplayStatus(viewingSubtask.status, viewingSubtask.dueDate)}
                   </span>
                 </div>
               </div>

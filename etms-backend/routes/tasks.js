@@ -656,7 +656,7 @@ router.put('/:id', auth, authorize('Admin'), async (req, res) => {
 });
 
 // @route   PUT /api/tasks/:id/status
-// @desc    Update task status (Manager can mark complete)
+// @desc    Update task status (Only Admin can mark Completed, Manager can update In Progress)
 // @access  Private
 router.put('/:id/status', auth, [
   body('status').isIn(['Pending', 'In Progress', 'Completed', 'Cancelled']).withMessage('Invalid status')
@@ -676,11 +676,26 @@ router.put('/:id/status', auth, [
     let updaterModel = 'Admin';
     let updaterId = null;
 
+    const newStatus = req.body.status;
+    const currentStatus = task.status;
+
+    // Status change restrictions
     if (req.user.role === 'Manager') {
       const manager = await Manager.findOne({ mid: req.user.id });
       if (task.assigned_to.toString() !== manager._id.toString()) {
         return res.status(403).json({ message: 'Not authorized to update this task' });
       }
+      
+      // Manager cannot revert/change a Completed task (only Admin can)
+      if (currentStatus === 'Completed') {
+        return res.status(403).json({ message: 'This task is completed. Only Admin can change its status.' });
+      }
+      
+      // Manager cannot update a Cancelled task
+      if (currentStatus === 'Cancelled') {
+        return res.status(403).json({ message: 'This task is cancelled. Only Admin can reactivate it.' });
+      }
+      
       updaterName = manager.name;
       updaterModel = 'Manager';
       updaterId = manager._id;
@@ -721,8 +736,8 @@ router.put('/:id/status', auth, [
             type: 'task_completed',
             title: 'Task Completed',
             message: `${updaterName} (Manager) completed task ${task.task_id}: "${task.task_name}"`,
-            recipient: admin.aid,
-            recipientModel: 'User',
+            recipient: admin._id,
+            recipientModel: 'Admin',
             sender: updaterId,
             senderModel: 'Manager',
             senderName: updaterName,
@@ -738,8 +753,8 @@ router.put('/:id/status', auth, [
             type: 'task_completed',
             title: 'Task Completed',
             message: `${updaterName} (Admin) marked task ${task.task_id}: "${task.task_name}" as completed`,
-            recipient: manager.mid,
-            recipientModel: 'User',
+            recipient: manager._id,
+            recipientModel: 'Manager',
             sender: updaterId,
             senderModel: 'Admin',
             senderName: updaterName,
@@ -757,8 +772,8 @@ router.put('/:id/status', auth, [
             type: 'status_update',
             title: 'Task In Progress',
             message: `${updaterName} (Manager) started working on task ${task.task_id}: "${task.task_name}"`,
-            recipient: admin.aid,
-            recipientModel: 'User',
+            recipient: admin._id,
+            recipientModel: 'Admin',
             sender: updaterId,
             senderModel: 'Manager',
             senderName: updaterName,
@@ -787,14 +802,15 @@ router.put('/subtasks/:id', auth, authorize('Manager'), async (req, res) => {
   try {
     const { subtask_name, description, due_date, assigned_to, status, priority } = req.body;
 
-    const subtask = await SubTask.findById(req.params.id);
+    const subtask = await SubTask.findById(req.params.id).populate('task_id');
     if (!subtask) {
       return res.status(404).json({ message: 'Subtask not found' });
     }
 
-    // Verify manager owns this subtask
+    // Verify manager is assigned to the parent task (can edit any subtask of their tasks)
     const manager = await Manager.findOne({ mid: req.user.id });
-    if (subtask.createdBy.toString() !== manager._id.toString()) {
+    const parentTask = subtask.task_id;
+    if (!parentTask || parentTask.assigned_to.toString() !== manager._id.toString()) {
       return res.status(403).json({ message: 'Not authorized to update this subtask' });
     }
 
@@ -838,7 +854,7 @@ router.put('/subtasks/:id', auth, authorize('Manager'), async (req, res) => {
 });
 
 // @route   PUT /api/tasks/subtasks/:id/status
-// @desc    Update subtask status (Staff can mark complete)
+// @desc    Update subtask status (Only Admin can mark Completed, Staff/Manager can update In Progress)
 // @access  Private
 router.put('/subtasks/:id/status', auth, [
   body('status').isIn(['Pending', 'In Progress', 'Completed', 'Cancelled']).withMessage('Invalid status')
@@ -858,11 +874,31 @@ router.put('/subtasks/:id/status', auth, [
     let updaterModel = 'Staff';
     let updaterId = null;
 
+    const newStatus = req.body.status;
+    const currentStatus = subtask.status;
+    const parentTask = subtask.task_id;
+
+    // Check if parent task is cancelled - no one can update subtask then (except Admin)
+    if (parentTask && parentTask.status === 'Cancelled' && req.user.role !== 'Admin') {
+      return res.status(403).json({ message: 'Parent task is cancelled. Cannot update subtask status.' });
+    }
+
     if (req.user.role === 'Staff') {
       const staff = await Staff.findOne({ sid: req.user.id });
-      if (subtask.assigned_to.toString() !== staff._id.toString()) {
+      if (!subtask.assigned_to || subtask.assigned_to.toString() !== staff._id.toString()) {
         return res.status(403).json({ message: 'Not authorized to update this subtask' });
       }
+      
+      // Staff cannot revert/change a Completed subtask (only Admin can)
+      if (currentStatus === 'Completed') {
+        return res.status(403).json({ message: 'This subtask is completed. Only Admin can change its status.' });
+      }
+      
+      // Staff cannot update a Cancelled subtask
+      if (currentStatus === 'Cancelled') {
+        return res.status(403).json({ message: 'This subtask is cancelled. Only Admin can reactivate it.' });
+      }
+      
       updaterName = staff.name;
       updaterModel = 'Staff';
       updaterId = staff._id;
@@ -871,6 +907,17 @@ router.put('/subtasks/:id/status', auth, [
       if (subtask.createdBy.toString() !== manager._id.toString()) {
         return res.status(403).json({ message: 'Not authorized to update this subtask' });
       }
+      
+      // Manager cannot revert/change a Completed subtask (only Admin can)
+      if (currentStatus === 'Completed') {
+        return res.status(403).json({ message: 'This subtask is completed. Only Admin can change its status.' });
+      }
+      
+      // Manager cannot update a Cancelled subtask
+      if (currentStatus === 'Cancelled') {
+        return res.status(403).json({ message: 'This subtask is cancelled. Only Admin can reactivate it.' });
+      }
+      
       updaterName = manager.name;
       updaterModel = 'Manager';
       updaterId = manager._id;
@@ -913,8 +960,8 @@ router.put('/subtasks/:id/status', auth, [
             type: 'subtask_completed',
             title: 'Subtask Completed',
             message: `${updaterName} (Staff) completed subtask ${subtask.subtask_no}: "${subtask.subtask_name}"`,
-            recipient: manager.mid,
-            recipientModel: 'User',
+            recipient: manager._id,
+            recipientModel: 'Manager',
             sender: updaterId,
             senderModel: 'Staff',
             senderName: updaterName,
@@ -933,8 +980,8 @@ router.put('/subtasks/:id/status', auth, [
               type: 'subtask_completed',
               title: 'Subtask Completed',
               message: `${updaterName} (Staff) completed subtask ${subtask.subtask_no}: "${subtask.subtask_name}"`,
-              recipient: assignedManager.mid,
-              recipientModel: 'User',
+              recipient: assignedManager._id,
+              recipientModel: 'Manager',
               sender: updaterId,
               senderModel: 'Staff',
               senderName: updaterName,
@@ -954,8 +1001,8 @@ router.put('/subtasks/:id/status', auth, [
               type: 'subtask_completed',
               title: 'Subtask Completed',
               message: `${updaterName} (Staff) completed subtask ${subtask.subtask_no}: "${subtask.subtask_name}"`,
-              recipient: admin.aid,
-              recipientModel: 'User',
+              recipient: admin._id,
+              recipientModel: 'Admin',
               sender: updaterId,
               senderModel: 'Staff',
               senderName: updaterName,
@@ -975,8 +1022,8 @@ router.put('/subtasks/:id/status', auth, [
               type: 'subtask_completed',
               title: 'Subtask Completed',
               message: `${updaterName} (Manager) completed subtask ${subtask.subtask_no}: "${subtask.subtask_name}"`,
-              recipient: admin.aid,
-              recipientModel: 'User',
+              recipient: admin._id,
+              recipientModel: 'Admin',
               sender: updaterId,
               senderModel: 'Manager',
               senderName: updaterName,
@@ -995,8 +1042,8 @@ router.put('/subtasks/:id/status', auth, [
               type: 'subtask_completed',
               title: 'Subtask Completed',
               message: `${updaterName} (Manager) marked subtask ${subtask.subtask_no}: "${subtask.subtask_name}" as completed`,
-              recipient: staff.sid,
-              recipientModel: 'User',
+              recipient: staff._id,
+              recipientModel: 'Staff',
               sender: updaterId,
               senderModel: 'Manager',
               senderName: updaterName,
@@ -1017,8 +1064,8 @@ router.put('/subtasks/:id/status', auth, [
             type: 'status_update',
             title: 'Subtask In Progress',
             message: `${updaterName} (Staff) started working on subtask ${subtask.subtask_no}: "${subtask.subtask_name}"`,
-            recipient: manager.mid,
-            recipientModel: 'User',
+            recipient: manager._id,
+            recipientModel: 'Manager',
             sender: updaterId,
             senderModel: 'Staff',
             senderName: updaterName,
@@ -1224,8 +1271,8 @@ router.post('/subtasks/:id/attachments', auth, authorize('Admin', 'Manager'), up
           type: 'attachment',
           title: 'New Attachment on Subtask',
           message: `${uploaderName} (Admin) uploaded files to subtask ${subtask.subtask_no}: ${fileNames}`,
-          recipient: manager.mid,
-          recipientModel: 'User',
+          recipient: manager._id,
+          recipientModel: 'Manager',
           sender: uploaderId,
           senderModel: 'Admin',
           senderName: uploaderName,
@@ -1244,8 +1291,8 @@ router.post('/subtasks/:id/attachments', auth, authorize('Admin', 'Manager'), up
             type: 'attachment',
             title: 'New Attachment on Subtask',
             message: `${uploaderName} (Admin) uploaded files to subtask ${subtask.subtask_no}: ${fileNames}`,
-            recipient: staff.sid,
-            recipientModel: 'User',
+            recipient: staff._id,
+            recipientModel: 'Staff',
             sender: uploaderId,
             senderModel: 'Admin',
             senderName: uploaderName,
@@ -1264,8 +1311,8 @@ router.post('/subtasks/:id/attachments', auth, authorize('Admin', 'Manager'), up
           type: 'attachment',
           title: 'New Attachment on Subtask',
           message: `${uploaderName} (Manager) uploaded files to subtask ${subtask.subtask_no}: ${fileNames}`,
-          recipient: admin.aid,
-          recipientModel: 'User',
+          recipient: admin._id,
+          recipientModel: 'Admin',
           sender: uploaderId,
           senderModel: 'Manager',
           senderName: uploaderName,
@@ -1284,8 +1331,8 @@ router.post('/subtasks/:id/attachments', auth, authorize('Admin', 'Manager'), up
             type: 'attachment',
             title: 'New Attachment on Subtask',
             message: `${uploaderName} (Manager) uploaded files to subtask ${subtask.subtask_no}: ${fileNames}`,
-            recipient: staff.sid,
-            recipientModel: 'User',
+            recipient: staff._id,
+            recipientModel: 'Staff',
             sender: uploaderId,
             senderModel: 'Manager',
             senderName: uploaderName,
@@ -1658,8 +1705,8 @@ router.post('/:id/comments', auth, authorize('Admin', 'Manager'), async (req, re
           type: 'comment',
           title: 'New Comment on Task',
           message: `${commentByName} (Admin) commented on task ${task.task_id}: "${text.substring(0, 50)}${text.length > 50 ? '...' : ''}"`,
-          recipient: manager.mid,
-          recipientModel: 'User',
+          recipient: manager._id,
+          recipientModel: 'Manager',
           sender: commentBy,
           senderModel: 'Admin',
           senderName: commentByName,
@@ -2010,8 +2057,8 @@ router.post('/subtasks/:id/staff-attachments', auth, authorize('Staff'), upload.
         type: 'attachment',
         title: 'New Attachment Added',
         message: `${staff.name} added ${req.files.length} attachment(s) to subtask ${subtask.subtask_id}`,
-        recipient: manager.mid,
-        recipientModel: 'User',
+        recipient: manager._id,
+        recipientModel: 'Manager',
         sender: staff._id,
         senderModel: 'Staff',
         senderName: staff.name,
@@ -2031,8 +2078,8 @@ router.post('/subtasks/:id/staff-attachments', auth, authorize('Staff'), upload.
           type: 'attachment',
           title: 'New Attachment Added',
           message: `${staff.name} added ${req.files.length} attachment(s) to subtask ${subtask.subtask_id}`,
-          recipient: assignedManager.mid,
-          recipientModel: 'User',
+          recipient: assignedManager._id,
+          recipientModel: 'Manager',
           sender: staff._id,
           senderModel: 'Staff',
           senderName: staff.name,
@@ -2052,8 +2099,8 @@ router.post('/subtasks/:id/staff-attachments', auth, authorize('Staff'), upload.
           type: 'attachment',
           title: 'New Attachment Added',
           message: `${staff.name} (Staff) added ${req.files.length} attachment(s) to subtask ${subtask.subtask_id}`,
-          recipient: admin.aid,
-          recipientModel: 'User',
+          recipient: admin._id,
+          recipientModel: 'Admin',
           sender: staff._id,
           senderModel: 'Staff',
           senderName: staff.name,
