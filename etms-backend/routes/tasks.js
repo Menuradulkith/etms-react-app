@@ -949,7 +949,6 @@ router.put('/subtasks/:id/status', auth, [
     });
 
     // Create notifications for status changes
-    const parentTask = subtask.task_id;
     
     if (req.body.status === 'Completed') {
       if (req.user.role === 'Staff') {
