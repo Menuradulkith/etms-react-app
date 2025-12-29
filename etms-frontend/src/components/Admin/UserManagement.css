@@ -285,11 +285,25 @@
   .page-header {
     flex-direction: column;
     align-items: flex-start;
-    gap: 16px;
+    gap: 12px;
+  }
+
+  .page-header .page-title {
+    font-size: 20px;
+  }
+
+  .btn-add-user {
+    width: 100%;
+    justify-content: center;
   }
 
   .modal-content {
-    padding: 24px;
+    padding: 20px;
+    width: 95%;
+  }
+
+  .modal-content h2 {
+    font-size: 20px;
   }
 
   .filter-section {
@@ -299,6 +313,7 @@
 
   .search-box {
     min-width: auto;
+    width: 100%;
   }
 
   .role-filter {
@@ -309,6 +324,84 @@
 
   .filter-select {
     width: 100%;
+  }
+
+  .users-table {
+    min-width: 600px;
+  }
+
+  .users-table th,
+  .users-table td {
+    padding: 10px 8px;
+    font-size: 12px;
+  }
+
+  .action-buttons {
+    flex-wrap: wrap;
+  }
+
+  .action-btn {
+    padding: 6px;
+  }
+}
+
+@media (max-width: 480px) {
+  .page-header {
+    gap: 10px;
+  }
+
+  .page-header .page-title {
+    font-size: 18px;
+  }
+
+  .btn-add-user {
+    padding: 10px 16px;
+    font-size: 13px;
+  }
+
+  .modal-content {
+    padding: 16px;
+  }
+
+  .modal-content h2 {
+    font-size: 18px;
+    margin-bottom: 16px;
+  }
+
+  .modal-content .form-group label {
+    font-size: 14px;
+  }
+
+  .modal-content .form-group input,
+  .modal-content .form-group select {
+    padding: 10px;
+    font-size: 14px;
+  }
+
+  .modal-buttons {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .modal-buttons button {
+    padding: 12px;
+    font-size: 14px;
+  }
+
+  .users-table {
+    min-width: 500px;
+  }
+
+  .users-table th,
+  .users-table td {
+    padding: 8px 6px;
+    font-size: 11px;
+  }
+
+  .role-badge,
+  .status-badge {
+    padding: 3px 8px;
+    font-size: 10px;
   }
 }
 

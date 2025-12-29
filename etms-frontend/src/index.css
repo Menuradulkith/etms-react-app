@@ -4,6 +4,19 @@
   box-sizing: border-box;
 }
 
+html, body {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+html {
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+}
+
 body {
   font-family: 'Times New Roman', Times, serif;
   background-color: #f5f5f5;
@@ -12,7 +25,9 @@ body {
 }
 
 #root {
-  min-height: 100vh;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
 }
 
 /* Scrollbar Styles */
@@ -32,4 +47,53 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: #555;
+}
+
+/* Mobile Scrollbar */
+@media (max-width: 768px) {
+  ::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+}
+
+/* Global responsive font sizing */
+@media (max-width: 768px) {
+  html {
+    font-size: 14px;
+  }
+}
+
+@media (max-width: 480px) {
+  html {
+    font-size: 13px;
+  }
+}
+
+/* Ensure images are responsive */
+img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Better touch targets for mobile */
+@media (max-width: 768px) {
+  button, 
+  input, 
+  select, 
+  textarea {
+    min-height: 44px;
+  }
+  
+  a {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+}
+
+/* Prevent horizontal overflow */
+.table-container {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }

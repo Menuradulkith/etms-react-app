@@ -195,7 +195,6 @@
 .notification-item.clickable:hover {
   background: #e8f4ff;
 }
-}
 
 .notification-content {
   flex: 1;
@@ -290,9 +289,61 @@
 }
 
 /* Responsive */
+@media (max-width: 768px) {
+  .notifications-dropdown {
+    width: calc(100vw - 24px);
+    right: -100px;
+    max-height: 70vh;
+  }
+
+  .notifications-header {
+    padding: 12px 16px;
+  }
+
+  .notifications-header h3 {
+    font-size: 14px;
+  }
+
+  .notification-item {
+    padding: 12px;
+  }
+
+  .notification-icon {
+    width: 32px;
+    height: 32px;
+  }
+
+  .notification-title {
+    font-size: 12px;
+  }
+
+  .notification-message {
+    font-size: 11px;
+  }
+}
+
 @media (max-width: 480px) {
   .notifications-dropdown {
-    width: calc(100vw - 20px);
-    right: -60px;
+    width: calc(100vw - 16px);
+    right: -80px;
+    max-height: 60vh;
+  }
+
+  .notifications-header {
+    padding: 10px 12px;
+  }
+
+  .notification-item {
+    padding: 10px;
+    gap: 8px;
+  }
+
+  .notification-icon {
+    width: 28px;
+    height: 28px;
+  }
+
+  .notification-actions {
+    opacity: 1;
   }
 }

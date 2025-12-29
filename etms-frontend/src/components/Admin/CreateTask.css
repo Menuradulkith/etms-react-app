@@ -263,11 +263,12 @@
 
 @media (max-width: 768px) {
   .task-form {
-    padding: 24px;
+    padding: 16px;
   }
 
   .form-row {
     grid-template-columns: 1fr;
+    gap: 16px;
   }
 
   .button-group {
@@ -277,5 +278,67 @@
   .btn-cancel,
   .btn-create {
     width: 100%;
+  }
+
+  .file-input-wrapper {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .file-upload-label {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .create-task {
+    padding: 0;
+  }
+
+  .task-form {
+    padding: 12px;
+    border-radius: 8px;
+  }
+
+  .page-title {
+    font-size: 20px;
+    margin-bottom: 16px;
+  }
+
+  .form-group {
+    margin-bottom: 16px;
+  }
+
+  .form-group label {
+    font-size: 13px;
+  }
+
+  .form-group input[type="text"],
+  .form-group textarea,
+  .form-group select {
+    padding: 10px;
+    font-size: 14px;
+  }
+
+  .date-picker {
+    padding: 10px;
+    font-size: 14px;
+  }
+
+  .file-upload-label {
+    padding: 10px 16px;
+    font-size: 14px;
+  }
+
+  .btn-cancel,
+  .btn-create {
+    padding: 12px 16px;
+    font-size: 14px;
+  }
+
+  .selected-file-item {
+    padding: 8px 10px;
+    flex-wrap: wrap;
   }
 }

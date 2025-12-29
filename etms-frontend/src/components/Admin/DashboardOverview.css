@@ -167,3 +167,54 @@
     padding: 16px;
   }
 }
+
+@media (max-width: 480px) {
+  .page-title {
+    font-size: 20px;
+    margin-bottom: 16px;
+  }
+
+  .stats-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .stat-card {
+    padding: 14px;
+    gap: 12px;
+  }
+
+  .stat-icon {
+    width: 40px;
+    height: 40px;
+  }
+
+  .stat-info h3 {
+    font-size: 12px;
+  }
+
+  .stat-value {
+    font-size: 20px;
+  }
+
+  .recent-activity {
+    padding: 12px;
+  }
+
+  .recent-activity h2 {
+    font-size: 16px;
+  }
+
+  .activity-item {
+    padding: 10px;
+  }
+
+  .activity-indicator {
+    width: 28px;
+    height: 28px;
+  }
+
+  .activity-text {
+    font-size: 13px;
+  }
+}

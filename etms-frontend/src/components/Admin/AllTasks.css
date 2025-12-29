@@ -285,34 +285,100 @@
 }
 
 @media (max-width: 768px) {
+  .all-tasks {
+    padding: 10px;
+    min-height: auto;
+  }
+
+  .all-tasks .page-title {
+    font-size: 20px;
+    margin-bottom: 10px;
+  }
+
+  .table-container {
+    min-height: auto;
+  }
+
+  .table-scroll-wrapper,
+  .table-wrapper {
+    min-height: auto;
+    height: auto;
+    max-height: 60vh;
+  }
+
+  .tasks-table {
+    min-width: 700px;
+  }
+
   .tasks-table th,
   .tasks-table td {
-    padding: 12px 8px;
-    font-size: 14px;
+    padding: 10px 6px;
+    font-size: 12px;
+  }
+
+  .status-badge {
+    padding: 4px 8px;
+    font-size: 10px;
   }
 
   .action-buttons {
-    flex-direction: column;
+    flex-direction: row;
+    flex-wrap: wrap;
     gap: 4px;
+  }
+
+  .action-btn {
+    padding: 6px;
   }
 
   .filter-section {
     flex-direction: column;
-    gap: 12px;
+    gap: 10px;
+    padding: 12px;
   }
 
   .search-box {
     min-width: auto;
+    width: 100%;
+  }
+
+  .search-input {
+    padding: 10px 12px;
   }
 
   .status-filter {
     width: 100%;
     flex-direction: column;
     align-items: flex-start;
+    gap: 8px;
   }
 
   .filter-select {
     width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .all-tasks {
+    padding: 6px;
+  }
+
+  .all-tasks .page-title {
+    font-size: 18px;
+  }
+
+  .filter-section {
+    padding: 10px;
+  }
+
+  .tasks-table {
+    min-width: 600px;
+  }
+
+  .tasks-table th,
+  .tasks-table td {
+    padding: 8px 4px;
+    font-size: 11px;
   }
 }
 

@@ -1,10 +1,17 @@
 .welcome-page {
-  min-height: 100vh;
+  height: 100%;
+  width: 100%;
   background: linear-gradient(135deg, #1a3a4a 0%, #2d5a6b 50%, #1a6969 100%);
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 40px 20px;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  overflow: auto;
 }
 
 .welcome-container {
