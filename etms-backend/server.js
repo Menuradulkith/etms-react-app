@@ -13,6 +13,7 @@ const taskRoutes = require('./routes/tasks');
 const activityRoutes = require('./routes/activities');
 const notificationRoutes = require('./routes/notifications');
 const departmentRoutes = require('./routes/departments');
+const Department = require('./models/Department');
 
 const app = express();
 
@@ -32,7 +33,27 @@ app.use('/uploads', express.static('uploads'));
 
 // MongoDB Connection
 mongoose.connect(process.env.MONGODB_URI)
-.then(() => console.log('✓ MongoDB Connected Successfully'))
+.then(async () => {
+  console.log('✓ MongoDB Connected Successfully');
+  // Ensure Department indexes are correct (allow re-adding deleted names)
+  try {
+    // Drop legacy global unique index on name if exists
+    const indexes = await Department.collection.indexes();
+    const legacyNameIndex = indexes.find(i => i.name === 'name_1');
+    if (legacyNameIndex && legacyNameIndex.unique) {
+      await Department.collection.dropIndex('name_1');
+      console.log('• Dropped legacy Department name_1 unique index');
+    }
+    // Create partial unique index for active departments
+    await Department.collection.createIndex(
+      { name: 1 },
+      { unique: true, partialFilterExpression: { isActive: true } }
+    );
+    console.log('• Ensured partial unique index on Department.name (isActive=true)');
+  } catch (idxErr) {
+    console.error('Index setup warning:', idxErr?.message || idxErr);
+  }
+})
 .catch((err) => console.error('✗ MongoDB Connection Error:', err));
 
 // Routes

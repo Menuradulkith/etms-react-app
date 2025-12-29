@@ -4,7 +4,6 @@ const departmentSchema = new mongoose.Schema({
   name: {
     type: String,
     required: [true, 'Department name is required'],
-    unique: true,
     trim: true
   },
   description: {
@@ -24,8 +23,13 @@ const departmentSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Index for faster queries
-departmentSchema.index({ name: 1 });
+// Indexes
+// Unique name only among active departments (partial index)
+departmentSchema.index(
+  { name: 1 },
+  { unique: true, partialFilterExpression: { isActive: true } }
+);
+// Helpful filter index
 departmentSchema.index({ isActive: 1 });
 
 module.exports = mongoose.model('Department', departmentSchema);
